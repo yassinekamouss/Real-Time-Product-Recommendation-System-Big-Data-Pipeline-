@@ -1,0 +1,138 @@
+x-airflow-common: &airflow-common
+  image: apache/airflow:2.8.1
+  environment:
+    - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+    - AIRFLOW__CORE__LOAD_EXAMPLES=False
+  volumes:
+    - ./dags:/opt/airflow/dags
+    - ./logs:/opt/airflow/logs
+    - ./src:/opt/airflow/src
+  user: "${AIRFLOW_UID:-50000}:0"
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  # -------------------------------------
+  # 1. KAFKA (Confluent KRaft Mode) - Port 9094 pour l'hôte
+  # -------------------------------------
+  kafka:
+    image: confluentinc/cp-kafka:7.6.0
+    container_name: kafka_broker
+    ports:
+      - "9094:9094"
+    environment:
+      - KAFKA_NODE_ID=1
+      - KAFKA_PROCESS_ROLES=broker,controller
+      - KAFKA_LISTENERS=PLAINTEXT://kafka:29092,CONTROLLER://kafka:29093,EXTERNAL://0.0.0.0:9094
+      - KAFKA_ADVERTISED_LISTENERS=PLAINTEXT://kafka:29092,EXTERNAL://localhost:9094
+      - KAFKA_CONTROLLER_LISTENER_NAMES=CONTROLLER
+      - KAFKA_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      - KAFKA_INTER_BROKER_LISTENER_NAME=PLAINTEXT
+      - KAFKA_CONTROLLER_QUORUM_VOTERS=1@kafka:29093
+      - KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR=1
+      - CLUSTER_ID=MkU3OEVBNTcwNTJENDM2Qk
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+    networks:
+      - bigdata-net
+
+  # -------------------------------------
+  # 2. APACHE SPARK (Chemins corrigés pour image officielle)
+  # -------------------------------------
+  # -------------------------------------
+  # 2. APACHE SPARK (Correction de la commande de lancement)
+  # -------------------------------------
+  spark-master:
+    image: apache/spark:3.5.1
+    container_name: spark_master
+    # Ajout impératif de la commande de démarrage
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
+    ports:
+      - "8080:8080"
+      - "7077:7077"
+    volumes:
+      - ./data:/opt/spark/data
+      - ./models:/opt/spark/models
+      - ./src:/opt/spark/src
+    networks:
+      - bigdata-net
+
+  spark-worker:
+    image: apache/spark:3.5.1
+    container_name: spark_worker
+    # Commande pour se connecter au master
+    command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    depends_on:
+      - spark-master
+    volumes:
+      - ./data:/opt/spark/data
+      - ./models:/opt/spark/models
+      - ./src:/opt/spark/src
+    networks:
+      - bigdata-net
+
+  # -------------------------------------
+  # 3. APACHE AIRFLOW & DATABASE
+  # -------------------------------------
+  postgres:
+    image: postgres:13
+    container_name: airflow_postgres
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    # AJOUTE CES DEUX LIGNES :
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "airflow"]
+      interval: 5s
+      retries: 5
+    networks:
+      - bigdata-net
+  airflow-init:
+    <<: *airflow-common
+    container_name: airflow_init
+    command: db migrate
+    environment:
+      # Variables héritées de x-airflow-common (obligatoire à répéter)
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      # Variables spécifiques à l'init
+      - _AIRFLOW_DB_UPGRADE=true
+      - _AIRFLOW_WWW_USER_CREATE=true
+      - _AIRFLOW_WWW_USER_USERNAME=admin
+      - _AIRFLOW_WWW_USER_PASSWORD=admin
+    networks:
+      - bigdata-net
+
+  airflow-webserver:
+    <<: *airflow-common
+    container_name: airflow_webserver
+    command: webserver
+    ports:
+      - "8081:8080"
+    depends_on:
+      - airflow-init
+    networks:
+      - bigdata-net
+
+  airflow-scheduler:
+    <<: *airflow-common
+    container_name: airflow_scheduler
+    command: scheduler
+    depends_on:
+      - airflow-init
+    networks:
+      - bigdata-net
+
+volumes:
+  kafka_data:
+  postgres_data:
+
+networks:
+  bigdata-net:
+    driver: bridge
