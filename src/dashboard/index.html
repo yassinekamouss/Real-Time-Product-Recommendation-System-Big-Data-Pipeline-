@@ -1,0 +1,448 @@
+<!doctype html>
+<html lang="fr">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Amazon Intelligence</title>
+    <!-- Polices typographiques distinctives pour un look éditorial luxueux -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Outfit:wght@300;400;500&display=swap"
+      rel="stylesheet" />
+    <style>
+      /* Variables CSS - Thème "Haute Couture & Data" */
+      :root {
+        --bg-color: #faf9f6;
+        --surface-color: #ffffff;
+        --text-primary: #121212;
+        --text-secondary: #5c5c5c;
+        --accent-color: #b59b6a; /* Beige doré très subtil */
+        --border-color: #e2e0d8;
+        --shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
+        --shadow-hover: 0 20px 50px -15px rgba(0, 0, 0, 0.08);
+        --transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+
+        --font-display: "Cormorant Garamond", serif;
+        --font-body: "Outfit", sans-serif;
+        --container-width: 1000px;
+      }
+
+      /* Reset & Base */
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        background-color: var(--bg-color);
+        color: var(--text-primary);
+        font-family: var(--font-body);
+        line-height: 1.6;
+        min-height: 100vh;
+        display: flex;
+        flex-direction: column;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+      }
+
+      /* Typographie */
+      h1,
+      h2,
+      h3 {
+        font-family: var(--font-display);
+        font-weight: 400;
+      }
+
+      /* Header Minimaliste */
+      header {
+        padding: 3rem 2rem;
+        text-align: center;
+      }
+
+      .logo {
+        font-size: 2.5rem;
+        letter-spacing: -0.02em;
+        color: var(--text-primary);
+        text-decoration: none;
+        position: relative;
+        display: inline-block;
+      }
+
+      .logo::after {
+        content: "";
+        position: absolute;
+        bottom: -5px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 40px;
+        height: 1px;
+        background-color: var(--accent-color);
+      }
+
+      /* Hero / Recherche */
+      .hero {
+        max-width: var(--container-width);
+        margin: 2rem auto 4rem;
+        padding: 0 2rem;
+        text-align: center;
+      }
+
+      .hero-subtitle {
+        font-size: 1.1rem;
+        color: var(--text-secondary);
+        margin-bottom: 2.5rem;
+        font-weight: 300;
+      }
+
+      .search-container {
+        display: flex;
+        justify-content: center;
+        align-items: stretch;
+        max-width: 600px;
+        margin: 0 auto;
+        position: relative;
+      }
+
+      .search-input {
+        flex: 1;
+        padding: 1.25rem 1.5rem;
+        font-family: var(--font-body);
+        font-size: 1rem;
+        color: var(--text-primary);
+        background-color: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-right: none;
+        outline: none;
+        transition: var(--transition);
+      }
+
+      .search-input:focus {
+        border-color: var(--text-primary);
+      }
+
+      .search-input::placeholder {
+        color: #a0a0a0;
+        font-weight: 300;
+      }
+
+      .search-button {
+        padding: 0 2.5rem;
+        background-color: var(--text-primary);
+        color: white;
+        font-family: var(--font-body);
+        font-size: 0.9rem;
+        font-weight: 500;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        border: 1px solid var(--text-primary);
+        cursor: pointer;
+        transition: var(--transition);
+      }
+
+      .search-button:hover {
+        background-color: transparent;
+        color: var(--text-primary);
+      }
+
+      /* Résultats & Grille de Cartes */
+      .results-section {
+        flex: 1;
+        max-width: var(--container-width);
+        margin: 0 auto;
+        padding: 0 2rem 4rem;
+        width: 100%;
+      }
+
+      .loader {
+        display: none;
+        text-align: center;
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        font-style: italic;
+        color: var(--text-secondary);
+        animation: pulse 1.5s infinite ease-in-out;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 0.4;
+        }
+        50% {
+          opacity: 1;
+        }
+      }
+
+      .error-message {
+        display: none;
+        text-align: center;
+        color: #a05252;
+        background-color: #fdf7f7;
+        padding: 1rem;
+        border: 1px solid #f0d4d4;
+        font-weight: 300;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        gap: 2.5rem;
+        margin-top: 2rem;
+      }
+
+      /* Design des cartes: style "Galerie d'Art" / Portfolio */
+      .card {
+        background-color: var(--surface-color);
+        border: 1px solid var(--border-color);
+        padding: 2.5rem 2rem;
+        transition: var(--transition);
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+
+        /* Initialement caché pour l'animation */
+        opacity: 0;
+        transform: translateY(20px);
+      }
+
+      .card:hover {
+        box-shadow: var(--shadow-hover);
+        transform: translateY(-5px);
+        border-color: var(--accent-color);
+      }
+
+      /* Effet "Ruban" discret sur le hover de la carte */
+      .card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 3px;
+        background-color: var(--accent-color);
+        transform: scaleX(0);
+        transform-origin: left;
+        transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+
+      .card:hover::before {
+        transform: scaleX(1);
+      }
+
+      .card-number {
+        font-family: var(--font-display);
+        font-style: italic;
+        font-size: 2rem;
+        color: var(--accent-color);
+        line-height: 1;
+        margin-bottom: 1.5rem;
+        opacity: 0.6;
+      }
+
+      .card-product-id {
+        font-size: 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        color: var(--text-secondary);
+        margin-bottom: 0.5rem;
+        word-break: break-all;
+      }
+
+      .card-rating-wrapper {
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .card-rating-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        color: #a0a0a0;
+      }
+
+      .card-rating-value {
+        font-family: var(--font-display);
+        font-size: 1.5rem;
+        color: var(--text-primary);
+      }
+
+      /* Footer discret */
+      footer {
+        text-align: center;
+        padding: 3rem 2rem;
+        border-top: 1px solid var(--border-color);
+        font-size: 0.8rem;
+        color: var(--text-secondary);
+        font-weight: 300;
+        letter-spacing: 0.02em;
+      }
+
+      /* Classe utilitaire pour l'animation (délai contrôlé en JS) */
+      .fade-in-up {
+        animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+      }
+
+      @keyframes fadeInUp {
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <a href="#" class="logo">Amazon Intelligence</a>
+    </header>
+
+    <section class="hero">
+      <p class="hero-subtitle">
+        Moteur de recommandations personnalisé prédictif.
+      </p>
+      <div class="search-container">
+        <input
+          type="text"
+          id="userInput"
+          class="search-input"
+          placeholder="Saisissez un UserId (ex: A3SGXH7AUHU8GW)..."
+          autocomplete="off"
+          spellcheck="false" />
+        <button id="searchBtn" class="search-button">Rechercher</button>
+      </div>
+    </section>
+
+    <main class="results-section">
+      <div id="loader" class="loader">Analyse de l'historique en cours...</div>
+      <div id="errorMessage" class="error-message"></div>
+      <div id="gridContainer" class="grid"></div>
+    </main>
+
+    <footer>Propulsé par Apache Spark MLlib — Modèle ALS (RMSE : 0.90)</footer>
+
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const searchBtn = document.getElementById("searchBtn");
+        const userInput = document.getElementById("userInput");
+        const gridContainer = document.getElementById("gridContainer");
+        const loader = document.getElementById("loader");
+        const errorMessage = document.getElementById("errorMessage");
+
+        // API Endpoint
+        const API_BASE_URL = "http://localhost:8000/api/recommend";
+
+        // Fonction pour afficher des erreurs de façon élégante
+        const showError = (msg) => {
+          errorMessage.textContent = msg;
+          errorMessage.style.display = "block";
+          gridContainer.innerHTML = "";
+        };
+
+        // Fonction de nettoyage
+        const resetUI = () => {
+          errorMessage.style.display = "none";
+          gridContainer.innerHTML = "";
+          loader.style.display = "block";
+        };
+
+        // Écouteur sur le bouton
+        searchBtn.addEventListener("click", async () => {
+          const userId = userInput.value.trim();
+
+          if (!userId) {
+            showError("Veuillez saisir un identifiant utilisateur valide.");
+            return;
+          }
+
+          resetUI();
+
+          try {
+            const response = await fetch(
+              `${API_BASE_URL}/${encodeURIComponent(userId)}`,
+            );
+            const json = await response.json();
+
+            loader.style.display = "none";
+
+            if (!response.ok) {
+              // Gestion du 404 personnalisé
+              throw new Error(
+                json.detail || "Le serveur a retourné une erreur.",
+              );
+            }
+
+            // Récupération de la liste de recommandations depuis Spark ALS payload
+            const recommendations = json.data;
+
+            if (
+              !Array.isArray(recommendations) ||
+              recommendations.length === 0
+            ) {
+              showError(
+                "Aucune recommandation disponible pour cet utilisateur.",
+              );
+              return;
+            }
+
+            // Génération dynamique des cartes
+            recommendations.forEach((rec, index) => {
+              // Extraction (Spark ALS renvoie classiquement selon vos settings: item_index et rating)
+              // Note: si dans 'streaming_recommender.py' vous n'avez pas re-transformé en string,
+              // vous avez probablement 'item_index' au lieu du 'ProductId' textuel.
+              const productId =
+                rec.item_index !== undefined
+                  ? rec.item_index
+                  : rec.ProductId ||
+                    `PROD-${Math.floor(Math.random() * 10000)}`;
+
+              const score =
+                rec.rating !== undefined
+                  ? parseFloat(rec.rating).toFixed(2)
+                  : rec.Score !== undefined
+                    ? parseFloat(rec.Score).toFixed(2)
+                    : "N/A";
+
+              const card = document.createElement("div");
+              card.className = "card fade-in-up";
+              // Stagger animation delay: +100ms per card
+              card.style.animationDelay = `${index * 0.1}s`;
+
+              card.innerHTML = `
+                            <div>
+                                <div class="card-number">N°0${index + 1}</div>
+                                <div class="card-product-id">Référence Produit<br/><strong>${productId}</strong></div>
+                            </div>
+                            <div class="card-rating-wrapper">
+                                <span class="card-rating-label">Affinité estimée</span>
+                                <span class="card-rating-value">${score} <span style="font-size:1rem; color:#A0A0A0">/ 5</span></span>
+                            </div>
+                        `;
+
+              gridContainer.appendChild(card);
+            });
+          } catch (error) {
+            loader.style.display = "none";
+            showError(
+              error.message ||
+                "Impossible de contacter l'API (Vérifiez qu'uvicorn tourne sur le port 8000)",
+            );
+          }
+        });
+
+        // Permettre la recherche en appuyant sur "Entrée"
+        userInput.addEventListener("keypress", (e) => {
+          if (e.key === "Enter") {
+            searchBtn.click();
+          }
+        });
+      });
+    </script>
+  </body>
+</html>
