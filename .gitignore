@@ -1,0 +1,76 @@
+# ==========================================
+# OS & IDE
+# ==========================================
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+
+# ==========================================
+# Environments & Secrets (CRITIQUE)
+# ==========================================
+.env
+.env.*
+!.env.example
+secrets.yaml
+
+# ==========================================
+# Dependencies & Python
+# ==========================================
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+.ivy2/
+.pytest_cache/
+
+# ==========================================
+# Big Data & ML (Data & Models)
+# ==========================================
+# On garde les dossiers mais on ignore les fichiers lourds
+data/*
+!data/.gitkeep
+
+# Ignorer spécifiquement le dataset lourd
+*.csv
+*.json
+*.parquet
+
+# Modèles et Checkpoints
+models/*
+!models/.gitkeep
+checkpoint/
+target/
+
+# ==========================================
+# Infrastructure & Database
+# ==========================================
+# Airflow local
+airflow.cfg
+airflow.db
+airflow-webserver.pid
+standalone_admin_password.txt
+
+# Si tu as des dossiers de données Docker locaux
+postgres_data/
+kafka_data/
+
+# ==========================================
+# Frontend & Build
+# ==========================================
+node_modules/
+dist/
+build/
+.next/
+*.sqlite
+
+# ==========================================
+# Git
+# ==========================================
+.github/
+
+
+# Ignorer tous les logs d'exécution
+logs/
+*.log
