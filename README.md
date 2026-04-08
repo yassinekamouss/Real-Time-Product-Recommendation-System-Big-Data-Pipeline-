@@ -16,17 +16,15 @@
 
 1. [Introduction](#1-introduction)
 2. [Architecture du Système](#2-architecture-du-système)
-3. [Stack Technique & Justifications](#3-stack-technique--justifications)
-4. [Pipeline de Données & Workflow](#4-pipeline-de-données--workflow)
-   - [Phase 1 : Ingestion Distribuée (Kafka)](#phase-1--ingestion-distribuée-kafka)
-   - [Phase 2 : Entraînement & Optimisation ML (Spark MLlib)](#phase-2--entraînement--optimisation-ml-spark-mllib)
-   - [Phase 3 : Inférence en Streaming (Spark Structured Streaming)](#phase-3--inférence-en-streaming-spark-structured-streaming)
-5. [Orchestration & MLOps (Airflow)](#5-orchestration--mlops-airflow)
-6. [Interface de Restitution (Serving)](#6-interface-de-restitution-serving)
-7. [Installation & Déploiement](#7-installation--déploiement)
-8. [Défis Techniques & Solutions](#8-défis-techniques--solutions)
-9. [Résultats & Performance](#9-résultats--performance)
-10. [Perspectives & Évolutions](#10-perspectives--évolutions)
+3. [Structure du Projet](#3-structure-du-projet)
+4. [Stack Technique & Justifications](#4-stack-technique--justifications)
+5. [Pipeline de Données & Workflow](#5-pipeline-de-données--workflow)
+6. [Orchestration & MLOps (Airflow)](#6-orchestration--mlops-airflow)
+7. [Interface de Restitution (Serving)](#7-interface-de-restitution-serving)
+8. [Installation & Déploiement](#8-installation--déploiement)
+9. [Défis Techniques & Solutions](#9-défis-techniques--solutions)
+10. [Résultats & Performance](#10-résultats--performance)
+11. [Perspectives & Évolutions](#11-perspectives--évolutions)
 
 ---
 
@@ -48,7 +46,7 @@ L'enjeu technique réside dans la convergence entre le **Batch Processing** (pou
 
 Le système repose sur une architecture découplée, conteneurisée via Docker, permettant une scalabilité horizontale de chaque composant.
 
-![Schéma de l'Architecture Globale du Projet](.docs/architecture_globale.png)
+![Schéma de l'Architecture Globale du Projet](.docs/architecture_mlops_pipeline.svg)
 
 ### Composants Clés :
 
@@ -60,7 +58,17 @@ Le système repose sur une architecture découplée, conteneurisée via Docker, 
 
 ---
 
-## 3. Stack Technique & Justifications
+## 3. Structure du Projet
+
+Afin de garantir la reproductibilité complète de l’environnement, certains fichiers sont générés dynamiquement lors de l’exécution des pipelines (Spark, Airflow, Docker volumes, etc.) et ne sont donc pas versionnés dans Git.
+
+La structure globale du projet est la suivante :
+
+![Structure du Projet](.docs/architecture_globale.png)
+
+---
+
+## 4. Stack Technique & Justifications
 
 | Technologie          | Rôle             | Justification Technique                                                                                     |
 | :------------------- | :--------------- | :---------------------------------------------------------------------------------------------------------- |
@@ -74,7 +82,7 @@ Le système repose sur une architecture découplée, conteneurisée via Docker, 
 
 ---
 
-## 4. Pipeline de Données & Workflow
+## 5. Pipeline de Données & Workflow
 
 ### Phase 1 : Ingestion Distribuée (Kafka)
 
@@ -108,7 +116,7 @@ Le job de streaming consomme le topic Kafka en continu. Pour chaque micro-batch 
 
 ---
 
-## 5. Orchestration & MLOps (Airflow)
+## 6. Orchestration & MLOps (Airflow)
 
 Le pipeline est automatisé via un DAG Airflow (`amazon_recommender_pipeline`) qui gère les dépendances critiques :
 
@@ -121,7 +129,7 @@ _L'orchestrateur assure la tolérance aux pannes avec des politiques de retries 
 
 ---
 
-## 6. Interface de Restitution (Serving)
+## 7. Interface de Restitution (Serving)
 
 Le Dashboard final a été conçu avec une approche **API-First** :
 
@@ -134,7 +142,7 @@ L'interface met en avant l'**Affinité Estimée** pour chaque produit, offrant u
 
 ---
 
-## 7. Guide Complet d'Installation & Mise en Route
+## 8. Guide Complet d'Installation & Mise en Route
 
 ### Étape A : Préparation de l'Infrastructure
 
@@ -220,7 +228,7 @@ Le projet s'appuie sur le jeu de données **Amazon Fine Food Reviews**. En raiso
 
 ---
 
-## 8. Défis Techniques & Solutions
+## 9. Défis Techniques & Solutions
 
 ### Problème de Sparsité des Données
 
@@ -242,7 +250,7 @@ Lors des exécutions Docker, les permissions sur `/home/spark/.ivy2` causaient d
 
 ---
 
-## 9. Résultats & Performance
+## 10. Résultats & Performance
 
 Les tests de validation ont été conduits sur un set de test indépendant (20% des données).
 
@@ -257,7 +265,7 @@ Le passage au **Grid Search** a permis une réduction de l'erreur quadratique de
 
 ---
 
-## 10. Perspectives & Évolutions
+## 11. Perspectives & Évolutions
 
 Bien que fonctionnel, le système peut être amélioré selon plusieurs axes :
 
