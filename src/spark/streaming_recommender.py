@@ -15,12 +15,13 @@ logger = logging.getLogger("StreamingRecommender")
 # Constantes de configuration
 KAFKA_BROKER = "kafka:29092"
 KAFKA_TOPIC = "user-ratings"
+
+CHECKPOINT_DIR = "/opt/spark/models/checkpoints/"
 MODEL_DIR = "/opt/spark/models/als_model"
 USER_INDEXER_PATH = "/opt/spark/models/user_indexer"
 ITEM_INDEXER_PATH = "/opt/spark/models/item_indexer"  # Au besoin
-CHECKPOINT_DIR = "/opt/spark/models/checkpoints/"
-
 DB_URL = "jdbc:postgresql://postgres:5432/airflow"
+
 DB_PROPERTIES = {
     "user": "airflow",
     "password": "airflow_pass",
@@ -47,9 +48,9 @@ def main():
         # Définition du schéma JSON attendu
         schema = StructType([
             StructField("UserId", StringType(), True),
-            StructField("ProductId", StringType(), True),
             StructField("Score", FloatType(), True),
-            StructField("Time", LongType(), True)
+            StructField("Time", LongType(), True),
+            StructField("ProductId", StringType(), True)
         ])
 
         logger.info(f"Connexion au stream Kafka ({KAFKA_BROKER}, topic: {KAFKA_TOPIC})...")
@@ -117,7 +118,7 @@ def main():
         query.awaitTermination()
 
     except Exception as e:
-        logger.error(f"Une erreur critique est survenue dans le job de streaming: {str(e)}")
+        logger.error(f"Une erreur est survenue dans le job de streaming: {str(e)}")
     finally:
         spark.stop()
 
