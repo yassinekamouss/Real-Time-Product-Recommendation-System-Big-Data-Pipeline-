@@ -280,7 +280,7 @@ Bien que fonctionnel, le système peut être amélioré selon plusieurs axes :
 
 - **[Yassine Kamouss]** - Architecture Big Data & DevOps
 - **[Yahya Ahmane]** - Machine Learning & Data Engineering
-
+- **[Mohammed Salhi]** - API Development & Orchestration MLOps (Airflow)
 ---
 
 © 2026 - Rapport de Projet Big Data - Faculté de Science et Technologie.
