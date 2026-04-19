@@ -108,7 +108,6 @@ services:
       - _AIRFLOW_WWW_USER_PASSWORD=admin
     networks:
       - bigdata-net
-
   airflow-webserver:
     <<: *airflow-common
     container_name: airflow_webserver
