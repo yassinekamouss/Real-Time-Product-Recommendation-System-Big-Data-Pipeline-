@@ -109,11 +109,19 @@ def main():
                 logger.info(f"Recommandations pour le batch {epoch_id} insérées dans PostgreSQL avec succès.")
 
         logger.info("Démarrage du query de streaming...")
-        query = parsed_stream.writeStream \
+
+
+
+
+
+                query = parsed_stream.writeStream \
             .outputMode("update") \
             .foreachBatch(process_batch) \
             .option("checkpointLocation", CHECKPOINT_DIR) \
             .start()
+
+
+        
 
         query.awaitTermination()
 
