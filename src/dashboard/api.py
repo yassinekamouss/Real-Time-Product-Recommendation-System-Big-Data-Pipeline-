@@ -68,13 +68,15 @@ def get_recommendations(user_id: str):
                 recs_data = json.loads(recs_data)
             except json.JSONDecodeError:
                 raise HTTPException(status_code=500, detail="Invalid JSON format in database.")
-                
-        return {
+
+                return {
             "status": "success",
             "user_id": user_id,
             "data": recs_data
         }
         
+    
+
     except psycopg2.Error as e:
         raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
     finally:
