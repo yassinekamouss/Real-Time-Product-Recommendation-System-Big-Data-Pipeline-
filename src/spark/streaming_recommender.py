@@ -1,125 +1,111 @@
+import os
 import logging
-from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, StringType, FloatType, LongType
-import pyspark.sql.functions as F
-from pyspark.ml.recommendation import ALSModel
-from pyspark.ml.feature import StringIndexerModel
+from typing import List
+from fastapi import FastAPI, HTTPException, Path
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+import psycopg2
+from psycopg2.extras import RealDictCursor
+import json
 
-# Configuration du logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+# Configuration
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialisation de l'application FastAPI
+app = FastAPI(
+    title="Amazon Product Recommendation API",
+    description="API REST pour servir les recommandations générées par Apache Spark ALS",
+    version="1.0.0"
 )
-logger = logging.getLogger("StreamingRecommender")
 
-# Constantes de configuration
-KAFKA_BROKER = "kafka:29092"
-KAFKA_TOPIC = "user-ratings"
-MODEL_DIR = "/opt/spark/models/als_model"
-USER_INDEXER_PATH = "/opt/spark/models/user_indexer"
-ITEM_INDEXER_PATH = "/opt/spark/models/item_indexer"  # Au besoin
-CHECKPOINT_DIR = "/opt/spark/models/checkpoints/"
+# Configuration CORS (Indispensable pour que le Frontend puisse appeler l'API)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], # En production, remplacez "*" par l'URL de votre frontend (ex: http://localhost:3000)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-DB_URL = "jdbc:postgresql://postgres:5432/airflow"
-DB_PROPERTIES = {
-    "user": "airflow",
-    "password": "airflow_pass",
-    "driver": "org.postgresql.Driver"
-}
+# Variables d'environnement pour la connexion PostgreSQL
+DB_HOST = os.getenv("POSTGRES_HOST", "postgres")
+DB_PORT = os.getenv("POSTGRES_PORT", "5432")
+DB_NAME = os.getenv("POSTGRES_DB", "airflow")
+DB_USER = os.getenv("POSTGRES_USER", "airflow")
+DB_PASS = os.getenv("POSTGRES_PASSWORD", "airflow")
 
-def main():
-    logger.info("Initialisation de la SparkSession streaming...")
-    spark = SparkSession.builder \
-        .appName("RealTimeProductRecommender") \
-        .getOrCreate()
-
-    spark.sparkContext.setLogLevel("WARN")
-
+def get_db_connection():
+    """Crée et retourne une connexion à la base de données PostgreSQL."""
     try:
-        logger.info("Chargement des modèles ML (ALS et StringIndexer)...")
-        als_model = ALSModel.load(MODEL_DIR)
-        user_indexer_model = StringIndexerModel.load(USER_INDEXER_PATH)
-        
-        # Optionnel: on peut charger l'item_indexer_model pour récupérer les vrais ProductId, 
-        # mais ici on se contente de la recommandation sous sa forme indexée pour la rapidité.
-        # item_indexer_model = StringIndexerModel.load(ITEM_INDEXER_PATH)
-
-        # Définition du schéma JSON attendu
-        schema = StructType([
-            StructField("UserId", StringType(), True),
-            StructField("ProductId", StringType(), True),
-            StructField("Score", FloatType(), True),
-            StructField("Time", LongType(), True)
-        ])
-
-        logger.info(f"Connexion au stream Kafka ({KAFKA_BROKER}, topic: {KAFKA_TOPIC})...")
-        kafka_stream = spark.readStream \
-            .format("kafka") \
-            .option("kafka.bootstrap.servers", KAFKA_BROKER) \
-            .option("subscribe", KAFKA_TOPIC) \
-            .option("startingOffsets", "latest") \
-            .load()
-
-        # Parsing des messages JSON
-        parsed_stream = kafka_stream.selectExpr("CAST(value AS STRING)") \
-            .select(F.from_json(F.col("value"), schema).alias("data")) \
-            .select("data.*")
-
-        def process_batch(batch_df, epoch_id):
-            """
-            Traitement de chaque micro-batch:
-            1. Extraction des utilisateurs uniques
-            2. Transformation de UserId -> user_index
-            3. Génération des top-5 recommandations
-            4. Sauvegarde dans PostgreSQL.
-            """
-            if batch_df.isEmpty():
-                return
-            
-            logger.info(f"Traitement du micro-batch {epoch_id}...")
-
-            # 1. Extraction des utilisateurs uniques du batch
-            unique_users_df = batch_df.select("UserId").distinct()
-
-            # 2. Transformation en user_index (numeric)
-            indexed_users_df = user_indexer_model.transform(unique_users_df)
-
-            # Pour se prémunir d'erreurs dues aux nouveaux utilisateurs non vus à l'entraînement,
-            # on filtre ceux dont l'index a bien été généré
-            valid_users_df = indexed_users_df.dropna(subset=["user_index"])
-
-            # 3. Génération des 5 recommandations par utilisateur
-            if not valid_users_df.isEmpty():
-                recs = als_model.recommendForUserSubset(valid_users_df, 5)
-
-                # Formatage de l'output pour PostgreSQL
-                # recs contient [user_index, recommendations (array of structs)]
-                # On joint avec valid_users_df pour récupérer le UserId original (string)
-                formatted_recs = recs.join(valid_users_df, "user_index", "inner") \
-                    .select(
-                        F.col("UserId"),
-                        F.to_json(F.col("recommendations")).alias("recommendations") # Stockage SQL sous format text/json
-                    )
-
-                # 4. Écriture en mode append dans la base PostgreSQL logicielle
-                formatted_recs.write \
-                    .jdbc(url=DB_URL, table="user_recommendations", mode="append", properties=DB_PROPERTIES)
-                
-                logger.info(f"Recommandations pour le batch {epoch_id} insérées dans PostgreSQL avec succès.")
-
-        logger.info("Démarrage du query de streaming...")
-        query = parsed_stream.writeStream \
-            .outputMode("update") \
-            .foreachBatch(process_batch) \
-            .option("checkpointLocation", CHECKPOINT_DIR) \
-            .start()
-
-        query.awaitTermination()
-
+        conn = psycopg2.connect(
+            host=DB_HOST,
+            port=DB_PORT,
+            database=DB_NAME,
+            user=DB_USER,
+            password=DB_PASS
+        )
+        return conn
     except Exception as e:
-        logger.error(f"Une erreur critique est survenue dans le job de streaming: {str(e)}")
-    finally:
-        spark.stop()
+        logger.error(f"Erreur de connexion à la base de données : {e}")
+        raise HTTPException(status_code=500, detail="Database connection error")
 
+# Modèles Pydantic pour la documentation Swagger
+class Recommendation(BaseModel):
+    ProductId: str
+    score: float
+
+class UserRecommendationResponse(BaseModel):
+    user_id: str
+    recommendations: List[Recommendation] # Changement de format pour inclure le score
+
+@app.get("/", tags=["Health Check"])
+def read_root():
+    return {"status": "API is running", "message": "Welcome to the Recommendation API"}
+
+@app.get("/recommendations/user/{user_id}", response_model=UserRecommendationResponse, tags=["Recommendations"])
+def get_recommendations_for_user(
+    user_id: str = Path(..., title="L'identifiant de l'utilisateur", example="A3SGXH7AUHU8GW")
+):
+    """
+    Récupère le Top-N des recommandations pour un utilisateur spécifique.
+    """
+    conn = None
+    try:
+        conn = get_db_connection()
+        cur = conn.cursor(cursor_factory=RealDictCursor)
+        
+        # Requête pour chercher les recommandations (on cherche la correspondance exacte de l'ID string)
+        cur.execute(
+            """
+            SELECT recommendations 
+            FROM user_recommendations 
+            WHERE "UserId" = %s
+            """,
+            (user_id,)
+        )
+        
+        result = cur.fetchone()
+        
+        if not result:
+            raise HTTPException(status_code=404, detail=f"Aucune recommandation trouvée pour l'utilisateur '{user_id}'. Il est peut-être inactif ou nouveau.")
+
+        # Dans PostgreSQL, on a stocké un texte JSON. On doit le parser.
+        recommendations_data = json.loads(result['recommendations'])
+
+        return {
+            "user_id": user_id,
+            "recommendations": recommendations_data
+        }
+
+    except psycopg2.Error as e:
+        logger.error(f"Erreur PostgreSQL : {e}")
+        raise HTTPException(status_code=500, detail="Erreur interne de la base de données")
+    finally:
+        if conn:
+            conn.close()
+
+# Permet de lancer le serveur en développement local
 if __name__ == "__main__":
-    main()
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)

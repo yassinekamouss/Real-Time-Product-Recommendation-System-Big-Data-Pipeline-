@@ -1,4 +1,5 @@
 pyspark
+apache-airflow-providers-apache-spark
 kafka-python-ng
 pandas
 numpy

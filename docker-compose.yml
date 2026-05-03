@@ -1,21 +1,33 @@
 x-airflow-common: &airflow-common
-  image: apache/airflow:2.8.1
+  build:
+    context: .
+    dockerfile: Dockerfile.airflow
   environment:
     - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+    - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
     - AIRFLOW__CORE__LOAD_EXAMPLES=False
+    - AIRFLOW__WEBSERVER__SECRET_KEY=une_cle_tres_secrete_123
+    - AIRFLOW__CORE__HOSTNAME_CALLABLE=airflow.utils.net.get_host_ip_address
   volumes:
     - ./dags:/opt/airflow/dags
     - ./logs:/opt/airflow/logs
     - ./src:/opt/airflow/src
+    - ./data:/opt/spark/data
+    - ./models:/opt/spark/models
   user: "${AIRFLOW_UID:-50000}:0"
   depends_on:
     postgres:
       condition: service_healthy
 
+x-spark-common: &spark-common
+  build:
+    context: .
+    dockerfile: Dockerfile.spark
+  image: spark:3.5.1
+
 services:
   # -------------------------------------
-  # 1. KAFKA (Confluent KRaft Mode) - Port 9094 pour l'hôte
+  # 1. KAFKA (Confluent KRaft Mode)
   # -------------------------------------
   kafka:
     image: confluentinc/cp-kafka:7.6.0
@@ -39,15 +51,11 @@ services:
       - bigdata-net
 
   # -------------------------------------
-  # 2. APACHE SPARK (Chemins corrigés pour image officielle)
-  # -------------------------------------
-  # -------------------------------------
-  # 2. APACHE SPARK (Correction de la commande de lancement)
+  # 2. APACHE SPARK
   # -------------------------------------
   spark-master:
-    image: apache/spark:3.5.1
+    <<: *spark-common
     container_name: spark_master
-    # Ajout impératif de la commande de démarrage
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.master.Master
     ports:
       - "8080:8080"
@@ -60,10 +68,11 @@ services:
       - bigdata-net
 
   spark-worker:
-    image: apache/spark:3.5.1
-    container_name: spark_worker
-    # Commande pour se connecter au master
+    <<: *spark-common
     command: /opt/spark/bin/spark-class org.apache.spark.deploy.worker.Worker spark://spark-master:7077
+    environment:
+      - SPARK_WORKER_CORES=2
+      - SPARK_WORKER_MEMORY=2g
     depends_on:
       - spark-master
     volumes:
@@ -72,6 +81,8 @@ services:
       - ./src:/opt/spark/src
     networks:
       - bigdata-net
+    deploy:
+      replicas: 2
 
   # -------------------------------------
   # 3. APACHE AIRFLOW & DATABASE
@@ -80,32 +91,35 @@ services:
     image: postgres:13
     container_name: airflow_postgres
     environment:
-      - POSTGRES_USER=${POSTGRES_USER}
-      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-      - POSTGRES_DB=${POSTGRES_DB}
-    # AJOUTE CES DEUX LIGNES :
+      - POSTGRES_USER=${POSTGRES_USER:-airflow}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-airflow}
+      - POSTGRES_DB=${POSTGRES_DB:-airflow}
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Correction critique pour la persistance
     healthcheck:
-      test: ["CMD", "pg_isready", "-U", "airflow"]
+      test: ["CMD", "pg_isready", "-U", "${POSTGRES_USER:-airflow}"]
       interval: 5s
       retries: 5
     networks:
       - bigdata-net
+
   airflow-init:
     <<: *airflow-common
     container_name: airflow_init
-    command: db migrate
+    command: version
     environment:
-      # Variables héritées de x-airflow-common (obligatoire à répéter)
       - AIRFLOW__CORE__EXECUTOR=LocalExecutor
-      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres/${POSTGRES_DB}
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow}@postgres/${POSTGRES_DB:-airflow}
       - AIRFLOW__CORE__LOAD_EXAMPLES=False
-      # Variables spécifiques à l'init
       - _AIRFLOW_DB_UPGRADE=true
       - _AIRFLOW_WWW_USER_CREATE=true
-      - _AIRFLOW_WWW_USER_USERNAME=admin
-      - _AIRFLOW_WWW_USER_PASSWORD=admin
+      - _AIRFLOW_WWW_USER_USERNAME=${AIRFLOW_WWW_USER_USERNAME:-admin}
+      - _AIRFLOW_WWW_USER_PASSWORD=${AIRFLOW_WWW_USER_PASSWORD:-admin}
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - bigdata-net
 
@@ -116,7 +130,8 @@ services:
     ports:
       - "8081:8080"
     depends_on:
-      - airflow-init
+      airflow-init:
+        condition: service_completed_successfully
     networks:
       - bigdata-net
 
@@ -125,9 +140,38 @@ services:
     container_name: airflow_scheduler
     command: scheduler
     depends_on:
-      - airflow-init
+      airflow-init:
+        condition: service_completed_successfully
     networks:
       - bigdata-net
+
+
+  # -------------------------------------
+  # 4. EXPOSITION REST API & FRONTEND
+  # -------------------------------------
+  api-recommendation:
+    build: 
+      # On indique le dossier où se trouve l'API
+      context: ./src/dashboard
+      # On pointe vers le bon Dockerfile
+      dockerfile: Dockerfile.api 
+    container_name: api_recommendation
+    ports:
+      # On expose le port 8000 de l'API vers le port 8000 de ton Ubuntu
+      - "8000:8000"
+    environment:
+      # Variables d'environnement pour la connexion à la BD
+      - API_DB_HOST=postgres
+      - API_DB_PORT=5432
+      - POSTGRES_DB=airflow
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow_pass
+    networks:
+      # Il doit être sur le même réseau que PostgreSQL et Kafka
+      - bigdata-net
+    depends_on:
+      # Il a besoin de la BD pour fonctionner
+      - postgres
 
 volumes:
   kafka_data:

@@ -1,0 +1,21 @@
+FROM apache/airflow:2.8.1
+
+USER root
+# Installation de Java (nécessaire pour exécuter Spark/PySpark), de procps (pour la commande ps) et netcat
+RUN apt-get update \
+    && apt-get install -y default-jre-headless procps netcat-openbsd \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Définition de JAVA_HOME (bonne pratique)
+ENV JAVA_HOME=/usr/lib/jvm/default-java
+
+# Création du dossier de données et assignation des permissions à l'utilisateur airflow
+RUN mkdir -p /opt/spark/data && chown -R airflow: /opt/spark/data
+
+USER airflow
+# Installation des dépendances Python (incluant pyspark pour que spark-submit soit disponible)
+RUN pip install --no-cache-dir apache-airflow-providers-apache-spark kafka-python pandas pyspark==3.5.1 psycopg2-binary
+
+# Configuration de SPARK_HOME pour que le driver Airflow trouve les binaires et jars Spark
+ENV SPARK_HOME=/home/airflow/.local/lib/python3.8/site-packages/pyspark

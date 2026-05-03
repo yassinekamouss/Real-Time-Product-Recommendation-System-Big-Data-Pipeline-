@@ -1,4 +1,5 @@
 import os
+import sys
 import json
 import time
 import random
@@ -15,14 +16,12 @@ logging.basicConfig(
 logger = logging.getLogger('KafkaProducer')
 
 # Configuration
-KAFKA_BROKER = os.environ.get('KAFKA_BROKER', 'localhost:9094')
+KAFKA_BROKER = os.environ.get('KAFKA_BROKER', 'kafka:29092')
 TOPIC_NAME = 'user-ratings'
 
-# Determine the absolute path to Reviews.csv
-# Assuming this script is in src/producer/ and the data is in data/
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-CSV_FILE_PATH = os.path.join(BASE_DIR, 'data', 'Reviews.csv')
-CHUNK_SIZE = 1000
+# Chemin absolu mis à jour pour correspondre au nouveau volume partagé Airflow/Spark
+CSV_FILE_PATH = '/opt/spark/data/Reviews.csv'
+CHUNK_SIZE = 50000
 
 def create_producer():
     """Create and return a KafkaProducer instance with retry logic."""
@@ -56,7 +55,7 @@ def process_and_send_data(producer):
     
     if not os.path.exists(CSV_FILE_PATH):
         logger.error(f"File not found: {CSV_FILE_PATH}. Please ensure the dataset is in the correct location.")
-        return
+        sys.exit(1)
 
     try:
         # Read the CSV file in chunks to optimize memory usage
@@ -70,7 +69,6 @@ def process_and_send_data(producer):
 
             for index, row in chunk.iterrows():
                 try:
-                    # Extract and transform data into JSON format
                     message = {
                         'UserId': str(row['UserId']),
                         'ProductId': str(row['ProductId']),
@@ -78,22 +76,21 @@ def process_and_send_data(producer):
                         'Time': int(row['Time'])
                     }
 
-                    # Send message to Kafka
                     producer.send(TOPIC_NAME, value=message)
                     
-                    # Log entry creation at DEBUG level (avoid flooding INFO)
-                    logger.debug(f"Sent: {message}")
-
-                    # Simulate real-time stream with a random delay (0.1s to 0.5s)
-                    time.sleep(random.uniform(0.1, 0.5))
+                    #time.sleep(random.uniform(0.001, 0.01))
 
                 except Exception as e:
                     logger.error(f"Error processing row {index}: {e}")
                     
             logger.info(f"Successfully processed a chunk of {len(chunk)} records.")
             
+    except FileNotFoundError as e:
+        logger.error(f"Erreur fatale: Le fichier CSV n'a pas été trouvé. {e}")
+        sys.exit(1)
     except Exception as e:
         logger.error(f"An unexpected error occurred during file processing: {e}")
+        sys.exit(1)
     finally:
         if producer:
             logger.info("Flushing messages and closing producer...")
@@ -105,5 +102,8 @@ if __name__ == '__main__':
     try:
         kafka_producer = create_producer()
         process_and_send_data(kafka_producer)
+        logger.info("Ingestion terminée avec succès.")
+        sys.exit(0)
     except Exception as e:
         logger.error(f"Fatal error in producer script: {e}")
+        sys.exit(1)

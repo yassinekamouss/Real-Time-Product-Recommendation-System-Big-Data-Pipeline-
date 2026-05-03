@@ -1,11 +1,12 @@
 import os
+import shutil
 import logging
 from pyspark.sql import SparkSession
 import pyspark.sql.functions as F
 from pyspark.ml.feature import StringIndexer
 from pyspark.ml.recommendation import ALS
 from pyspark.ml.evaluation import RegressionEvaluator
-from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
+from pyspark.ml.tuning import ParamGridBuilder, TrainValidationSplit
 
 # Configuration du logging
 logging.basicConfig(
@@ -14,20 +15,29 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Chemins
+# Chemins exacts
 DATA_PATH = "/opt/spark/data/Reviews.csv"
 MODEL_DIR = "/opt/spark/models/als_model"
 USER_INDEXER_PATH = "/opt/spark/models/user_indexer"
 ITEM_INDEXER_PATH = "/opt/spark/models/item_indexer"
 
 def main():
-    logger.info("Initialisation de la SparkSession...")
+    logger.info("Initialisation de la SparkSession connectée au cluster...")
     spark = SparkSession.builder \
         .appName("ProductRecommendationTrainingOptimized") \
+        .master("spark://spark-master:7077") \
+        .config("spark.executor.memory", "2g") \
+        .config("spark.driver.memory", "1g") \
+        .config("spark.executor.cores", "2") \
+        .config("mapreduce.fileoutputcommitter.marksuccessfuljobs", "false") \
+        .config("mapreduce.fileoutputcommitter.algorithm.version", "2") \
+        .config("spark.hadoop.mapreduce.fileoutputcommitter.algorithm.version", "2") \
+        .config("spark.speculation", "false") \
         .getOrCreate()
 
     try:
         logger.info(f"Chargement des données depuis {DATA_PATH}...")
+        print(f"DEBUG: Tentative de lecture du fichier au chemin exact -> {DATA_PATH}")
         df = spark.read.csv(DATA_PATH, header=True, inferSchema=True)
         
         df = df.select(
@@ -50,6 +60,11 @@ def main():
         df = df.join(item_counts, "ProductId", "inner")
 
         logger.info("Prétraitement : Transformation avec StringIndexer...")
+        
+        # 1. OPTIMISATION : Mise en cache des données après nettoyage pour éviter de tout recalculer
+        df.cache()
+        logger.info(f"Nombre de lignes après nettoyage et filtrage : {df.count()}")
+
         user_indexer = StringIndexer(inputCol="UserId", outputCol="user_index", handleInvalid="keep")
         item_indexer = StringIndexer(inputCol="ProductId", outputCol="item_index", handleInvalid="keep")
 
@@ -59,22 +74,17 @@ def main():
         item_indexer_model = item_indexer.fit(df)
         df = item_indexer_model.transform(df)
 
-        logger.info("Split des données : 80% entraînement, 20% test...")
-        (training_data, test_data) = df.randomSplit([0.8, 0.2], seed=42)
+        # 3. Séparation stricte : 90% (Train/Validation) et 10% (Test final)
+        logger.info("Split des données : 90% (Train+Validation), 10% (Test)...")
+        # On extrait les 10% de données non rencontrées pour le test final de l'architecture
+        (train_val_data, test_data) = df.randomSplit([0.9, 0.1], seed=42)
 
-        logger.info("Configuration de ALS et de la validation croisée...")
         als = ALS(
             userCol="user_index",
             itemCol="item_index",
             ratingCol="Score",
             coldStartStrategy="drop"
         )
-        
-        # 1. ParamGridBuilder
-        param_grid = ParamGridBuilder() \
-            .addGrid(als.rank, [10, 50, 100]) \
-            .addGrid(als.regParam, [0.01, 0.1, 1.0]) \
-            .build()
             
         evaluator = RegressionEvaluator(
             metricName="rmse",
@@ -82,32 +92,41 @@ def main():
             predictionCol="prediction"
         )
         
-        # 2. CrossValidator (3 folds)
-        cv = CrossValidator(
+        # 4. Ajustement des hyperparamètres pour respecter l'énoncé
+        logger.info("Configuration de la grille d'hyperparamètres (légère)...")
+        param_grid = ParamGridBuilder() \
+            .addGrid(als.rank, [10, 20]) \
+            .addGrid(als.regParam, [0.1, 0.05]) \
+            .build()
+
+        # TrainValidationSplit va diviser le set de 90% en interne (trainRatio=0.88 équivaut à ~80% train / ~10% validation)
+        tvs = TrainValidationSplit(
             estimator=als,
             estimatorParamMaps=param_grid,
             evaluator=evaluator,
-            numFolds=3,
-            seed=42
+            trainRatio=0.88 
         )
 
-        logger.info("Entraînement et optimisation des hyperparamètres (Grid Search + 3 Folds)...")
-        cv_model = cv.fit(training_data)
+        logger.info("Entraînement et validation du modèle ALS en cours...")
+        tvs_model = tvs.fit(train_val_data)
         
-        # Extraction du meilleur modèle
-        best_model = cv_model.bestModel
+        # Extraction du meilleur modèle trouvé par la grille
+        best_model = tvs_model.bestModel
 
-        best_rank = best_model._java_obj.parent().getRank()
-        best_reg = best_model._java_obj.parent().getRegParam()
-        logger.info(f"Meilleurs hyperparamètres identifiés : rank = {best_rank}, regParam = {best_reg}")
+        # 5. Évaluation sur les 10% restants (strictement inconnus)
+        logger.info("Évaluation finale du modèle sur le set de test (10%)...")
+        test_predictions = best_model.transform(test_data)
+        final_rmse = evaluator.evaluate(test_predictions)
+        logger.info(f"*** RMSE FINAL SUR LE SET DE TEST = {final_rmse} ***")
 
-        logger.info("Évaluation du best model sur les données de test final...")
-        predictions = best_model.transform(test_data)
-        rmse = evaluator.evaluate(predictions)
-        logger.info(f"Root-mean-square error (RMSE) optimisé sur le set de test = {rmse}")
-
+        
         logger.info("Sauvegarde des modèles en cours...")
-        # Sauvegarde du meilleur modèle
+        # Bloc de sécurité : création du dossier parent et nettoyage des anciens modèles pour éviter les plantages d'écriture
+        base_models_dir = "/opt/spark/models"
+        if not os.path.exists(base_models_dir):
+            os.makedirs(base_models_dir, exist_ok=True)
+        
+        # Sauvegarde du modèle
         best_model.write().overwrite().save(MODEL_DIR)
         logger.info(f"Best Modèle ALS sauvegardé vers : {MODEL_DIR}")
         
@@ -121,6 +140,8 @@ def main():
         
     except Exception as e:
         logger.error(f"Erreur rencontrée lors de l'entraînement : {str(e)}")
+        import sys
+        sys.exit(1)
     finally:
         spark.stop()
         logger.info("SparkSession arrêtée.")

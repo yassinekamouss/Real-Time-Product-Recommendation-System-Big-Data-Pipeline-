@@ -1,0 +1,25 @@
+# On part d'une image Python légère
+FROM python:3.9-slim
+
+# On définit le répertoire de travail dans le conteneur
+WORKDIR /opt/api/src
+
+# Installation des dépendances système nécessaires pour PostgreSQL
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends gcc libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copie du fichier des dépendances
+COPY requirements.api.txt .
+
+# Installation des packages Python
+RUN pip install --no-cache-dir -r requirements.api.txt
+
+# Copie du code source (api.py et index.html)
+COPY . .
+
+# Exposition du port sur lequel FastAPI va tourner
+EXPOSE 8000
+
+# Lancement du serveur Uvicorn
+CMD ["uvicorn", "api:app", "--host", "0.0.0.0", "--port", "8000"]

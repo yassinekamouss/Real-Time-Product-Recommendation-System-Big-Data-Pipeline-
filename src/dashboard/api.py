@@ -1,8 +1,27 @@
+import os
 import json
 import psycopg2
+from psycopg2.pool import SimpleConnectionPool
 from psycopg2.extras import RealDictCursor
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+
+# Database connection parameters via environment variables
+DB_PARAMS = {
+    "host": os.getenv("API_DB_HOST", "localhost"),
+    "port": int(os.getenv("API_DB_PORT", 5432)),
+    "dbname": os.getenv("POSTGRES_DB", "airflow"),
+    "user": os.getenv("POSTGRES_USER", "airflow"),
+    "password": os.getenv("POSTGRES_PASSWORD", "airflow_pass")
+}
+
+# 3. Initialize Connection Pool
+try:
+    db_pool = SimpleConnectionPool(1, 20, **DB_PARAMS)
+except psycopg2.Error as e:
+    print(f"Error initializing connection pool: {e}")
+    db_pool = None
 
 # Initialize FastAPI App
 app = FastAPI(
@@ -20,45 +39,48 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Database connection parameters
-DB_PARAMS = {
-    "host": "localhost",
-    "port": 5432,
-    "dbname": "airflow",
-    "user": "airflow",
-    "password": "airflow_pass"
-}
+@app.get("/")
+def serve_dashboard():
+    """
+    Sert le fichier statique index.html qui sert de dashboard (interface web).
+    """
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+    index_path = os.path.join(base_dir, "index.html")
+    
+    if os.path.exists(index_path):
+        return FileResponse(index_path)
+    else:
+        raise HTTPException(status_code=404, detail="Le fichier index.html du dashboard est introuvable.")
 
-def get_db_connection():
-    """Establish and return a PostgreSQL connection."""
-    try:
-        conn = psycopg2.connect(**DB_PARAMS)
-        return conn
-    except psycopg2.Error as e:
-        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
+# Produits populaires de secours pour le Cold Start
+POPULAR_PRODUCTS = ["B007JFMCB6", "B000HDOPZG", "B002QWP8H0", "B000KV61FC", "B000N9912G"]
 
-@app.get("/api/recommend/{user_id}")
+@app.get("/recommendations/user/{user_id}")
 def get_recommendations(user_id: str):
     """
     Fetch personalized recommendations for a specific user ID from PostgreSQL.
-    Returns a JSON array of recommended products.
+    If user is unknown, returns a fallback list of popular products (Cold Start).
     """
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="Database pool is not available.")
+
     conn = None
+    cur = None
     try:
-        conn = get_db_connection()
-        # Using RealDictCursor for cleaner data access
+        # Get connection from pool
+        conn = db_pool.getconn()
         cur = conn.cursor(cursor_factory=RealDictCursor)
         
-        # Spark usually preserves case when creating tables, so we quote "UserId"
         query = 'SELECT recommendations FROM user_recommendations WHERE "UserId" = %s LIMIT 1;'
         cur.execute(query, (user_id,))
         row = cur.fetchone()
         
+        # 1. Gestion du Cold Start : renvoyer les produits populaires par défaut
         if not row:
-            raise HTTPException(
-                status_code=404, 
-                detail=f"Aucune recommandation trouvée pour l'utilisateur '{user_id}'. Il est soit inconnu, soit en attente de traitement."
-            )
+            return {
+                "user_id": user_id,
+                "recommendations": POPULAR_PRODUCTS
+            }
             
         recs_data = row['recommendations']
         
@@ -67,17 +89,33 @@ def get_recommendations(user_id: str):
             try:
                 recs_data = json.loads(recs_data)
             except json.JSONDecodeError:
-                raise HTTPException(status_code=500, detail="Invalid JSON format in database.")
+                recs_data = []
                 
+        # Extraction des identifiants de produits sous forme de simple liste de chaînes
+        formatted_recs = []
+        for item in recs_data:
+            if isinstance(item, dict):
+                # ALS retourne des structures de type {"item_index": 12, "rating": 4.5}
+                if "item_index" in item:
+                    formatted_recs.append(str(item["item_index"]))
+                elif "ProductId" in item:
+                    formatted_recs.append(str(item["ProductId"]))
+                else:
+                    formatted_recs.append(str(item))
+            else:
+                formatted_recs.append(str(item))
+                
+        # 2. Respect strict du format JSON de réponse attendu
         return {
-            "status": "success",
             "user_id": user_id,
-            "data": recs_data
+            "recommendations": formatted_recs
         }
         
     except psycopg2.Error as e:
         raise HTTPException(status_code=500, detail=f"Database query error: {str(e)}")
     finally:
-        if conn:
+        if cur:
             cur.close()
-            conn.close()
+        if conn:
+            # Release connection back to the pool
+            db_pool.putconn(conn)

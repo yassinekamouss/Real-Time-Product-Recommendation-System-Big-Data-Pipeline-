@@ -74,3 +74,8 @@ build/
 # Ignorer tous les logs d'exécution
 logs/
 *.log
+
+
+.opencode/
+.docs/*.pdf
+graphify-out/
