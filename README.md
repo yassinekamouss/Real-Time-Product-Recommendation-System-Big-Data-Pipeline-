@@ -46,7 +46,7 @@ L'enjeu technique reside dans la convergence entre le **Batch Processing** (pour
 
 Le systeme repose sur une architecture decouplee, **100% conteneurisee** via Docker Compose, permettant une scalabilite horizontale de chaque composant.
 
-![Schema de l'Architecture Globale du Projet](.docs/architecture_data_pipeline.svg)
+![Schema de l'Architecture Globale du Projet](.docs/architecture.png)
 
 ### Composants Cles :
 
