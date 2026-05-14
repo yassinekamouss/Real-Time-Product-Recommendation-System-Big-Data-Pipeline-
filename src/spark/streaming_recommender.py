@@ -21,12 +21,39 @@ KAFKA_BROKER = os.getenv("KAFKA_BROKER", "kafka:29092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "user-ratings")
 
 SPARK_MASTER = os.getenv("SPARK_MASTER", "spark://spark-master:7077")
-MODEL_DIR = os.getenv("SPARK_MODEL_DIR", "/opt/spark/models/als_model")
-USER_INDEXER_PATH = os.getenv("SPARK_USER_INDEXER_PATH", "/opt/spark/models/user_indexer")
-ITEM_INDEXER_PATH = os.getenv("SPARK_ITEM_INDEXER_PATH", "/opt/spark/models/item_indexer")
-CHECKPOINT_DIR = os.getenv("SPARK_CHECKPOINT_DIR", "/opt/spark/models/checkpoints/streaming")
+
+MODEL_DIR = "file:///opt/spark/models/als_model"
+USER_INDEXER_PATH = "file:///opt/spark/models/user_indexer"
+ITEM_INDEXER_PATH = "file:///opt/spark/models/item_indexer"
+CHECKPOINT_DIR = "file:///opt/spark/models/checkpoints/streaming"
 
 TOP_N = int(os.getenv("RECOMMEND_TOP_N", "5"))
+
+def init_db():
+    """
+    CORRECTION 2 : Initialise la table dès le lancement.
+    Ainsi, l'API ne plantera jamais, même si Kafka est vide !
+    """
+    conn = None
+    try:
+        conn = psycopg2.connect(
+            host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS
+        )
+        cur = conn.cursor()
+        cur.execute("""
+            CREATE TABLE IF NOT EXISTS user_recommendations (
+                "UserId" VARCHAR(255) PRIMARY KEY,
+                recommendations TEXT
+            )
+        """)
+        conn.commit()
+        cur.close()
+        logger.info("Table PostgreSQL 'user_recommendations' vérifiée/créée avec succès.")
+    except Exception as e:
+        logger.error(f"Erreur lors de la création de la table : {e}")
+    finally:
+        if conn:
+            conn.close()
 
 def save_to_postgres(batch_df, batch_id, item_labels):
     if batch_df.rdd.isEmpty():
@@ -37,20 +64,9 @@ def save_to_postgres(batch_df, batch_id, item_labels):
 
     try:
         conn = psycopg2.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            dbname=DB_NAME,
-            user=DB_USER,
-            password=DB_PASS
+            host=DB_HOST, port=DB_PORT, dbname=DB_NAME, user=DB_USER, password=DB_PASS
         )
         cur = conn.cursor()
-
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS user_recommendations (
-                "UserId" VARCHAR(255) PRIMARY KEY,
-                recommendations TEXT
-            )
-        """)
 
         for row in records:
             user_id = str(row["UserId"])
@@ -72,15 +88,18 @@ def save_to_postgres(batch_df, batch_id, item_labels):
             """, (user_id, recs_json))
 
         conn.commit()
-        logger.info("Batch %s : %s recommandations mises a jour en base.", batch_id, len(records))
+        logger.info(f"Batch {batch_id} : {len(records)} recommandations mises à jour en base.")
         cur.close()
     except Exception as e:
-        logger.error("Erreur d'insertion PostgreSQL : %s", e)
+        logger.error(f"Erreur d'insertion PostgreSQL : {e}")
     finally:
         if conn:
             conn.close()
 
 def main():
+    # On crée la table avant même de lancer Spark
+    init_db()
+
     spark = SparkSession.builder \
         .appName("RealTimeRecommender") \
         .master(SPARK_MASTER) \
@@ -94,9 +113,10 @@ def main():
         user_indexer = StringIndexerModel.load(USER_INDEXER_PATH)
         item_indexer = StringIndexerModel.load(ITEM_INDEXER_PATH)
         item_labels = item_indexer.labels
+        logger.info("Modèles chargés avec succès !")
     except Exception as e:
-        logger.error("Modeles introuvables. Entrainement batch a verifier. Erreur: %s", e)
-        return
+        logger.error(f"Modeles introuvables. Entrainement batch a verifier. Erreur: {e}")
+        import sys; sys.exit(1)
 
     max_user_index = None
     try:
@@ -115,7 +135,7 @@ def main():
         .format("kafka") \
         .option("kafka.bootstrap.servers", KAFKA_BROKER) \
         .option("subscribe", KAFKA_TOPIC) \
-        .option("startingOffsets", "latest") \
+        .option("startingOffsets", "earliest") \
         .load()
 
     parsed_df = kafka_df.selectExpr("CAST(value AS STRING) AS value") \

@@ -30,6 +30,18 @@ with DAG(
         retry_delay=timedelta(seconds=15)
     )
 
+    create_kafka_topic = BashOperator(
+        task_id='create_kafka_topic',
+        bash_command='''python -c "
+from kafka.admin import KafkaAdminClient, NewTopic
+try:
+    admin = KafkaAdminClient(bootstrap_servers='kafka:29092')
+    admin.create_topics([NewTopic(name='user-ratings', num_partitions=1, replication_factor=1)])
+except Exception as e:
+    print('Topic may already exist or error:', e)
+"'''
+    )
+
     # ---------------------------------------------------------
     # BRANCHE 1 : LE FLUX DE DONNÉES (SIMULATION TEMPS RÉEL)
     # ---------------------------------------------------------
@@ -76,8 +88,22 @@ with DAG(
     # L'ORCHESTRATION PARALLÈLE (LE SECRET D'UN BON DAG)
     # =========================================================
     
-    # Le producer démarre dès que Kafka est prêt (Branche 1)
-    wait_for_kafka >> ingest_data
-    
-    # L'entraînement démarre en parallèle. Le streaming attend que le modèle soit prêt (Branche 2)
-    wait_for_kafka >> train_model >> start_streaming
+    check_models = BashOperator(
+        task_id='check_models_exist',
+        bash_command="""
+            for path in /opt/spark/models/als_model/metadata \
+                        /opt/spark/models/user_indexer/metadata \
+                        /opt/spark/models/item_indexer/metadata; do
+                if [ ! -d "$path" ]; then
+                    echo "ERREUR: Modèle manquant: $path"
+                    exit 1
+                fi
+            done
+            echo "Tous les modèles sont présents."
+        """,
+    )
+
+    # Nouveau pipeline
+    wait_for_kafka >> create_kafka_topic
+    create_kafka_topic >> ingest_data
+    create_kafka_topic >> train_model >> check_models >> start_streaming

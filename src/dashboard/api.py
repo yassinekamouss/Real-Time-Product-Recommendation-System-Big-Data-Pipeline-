@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 
 # Database connection parameters via environment variables
 DB_PARAMS = {
-    "host": os.getenv("API_DB_HOST", "localhost"),
+    "host": os.getenv("API_DB_HOST", "postgres"),
     "port": int(os.getenv("API_DB_PORT", 5432)),
     "dbname": os.getenv("POSTGRES_DB", "airflow"),
     "user": os.getenv("POSTGRES_USER", "airflow"),

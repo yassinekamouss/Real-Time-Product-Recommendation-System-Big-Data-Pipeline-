@@ -2,6 +2,7 @@ import os
 import shutil
 import logging
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
 import pyspark.sql.functions as F
 from pyspark.ml.feature import StringIndexer
 from pyspark.ml.recommendation import ALS
@@ -16,10 +17,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Chemins exacts
-DATA_PATH = "/opt/spark/data/Reviews.csv"
-MODEL_DIR = "/opt/spark/models/als_model"
-USER_INDEXER_PATH = "/opt/spark/models/user_indexer"
-ITEM_INDEXER_PATH = "/opt/spark/models/item_indexer"
+DATA_PATH = "file:///opt/spark/data/Reviews.csv"
+MODEL_DIR = "file:///opt/spark/models/als_model"
+USER_INDEXER_PATH = "file:///opt/spark/models/user_indexer"
+ITEM_INDEXER_PATH = "file:///opt/spark/models/item_indexer"
 
 def main():
     logger.info("Initialisation de la SparkSession connectée au cluster...")
@@ -40,6 +41,12 @@ def main():
         print(f"DEBUG: Tentative de lecture du fichier au chemin exact -> {DATA_PATH}")
         df = spark.read.csv(DATA_PATH, header=True, inferSchema=True)
         
+        df = df.withColumn("Time", col("Time").cast("long"))
+
+        # Split logique deterministe pour eviter le data leakage (batch 60%).
+        df = df.filter(col("Time") % 10 < 6)
+        logger.info("Split logique 60%% applique (Time %% 10 < 6)")
+
         df = df.select(
             df['UserId'].cast('string'),
             df['ProductId'].cast('string'),

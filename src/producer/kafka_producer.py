@@ -69,14 +69,16 @@ def process_and_send_data(producer):
 
             for index, row in chunk.iterrows():
                 try:
-                    message = {
-                        'UserId': str(row['UserId']),
-                        'ProductId': str(row['ProductId']),
-                        'Score': float(row['Score']),
-                        'Time': int(row['Time'])
-                    }
+                    # Split logique deterministe pour eviter le data leakage (streaming 40%).
+                    if int(row['Time']) % 10 >= 6:
+                        message = {
+                            'UserId': str(row['UserId']),
+                            'ProductId': str(row['ProductId']),
+                            'Score': float(row['Score']),
+                            'Time': int(row['Time'])
+                        }
 
-                    producer.send(TOPIC_NAME, value=message)
+                        producer.send(TOPIC_NAME, value=message)
                     
                     #time.sleep(random.uniform(0.001, 0.01))
 
