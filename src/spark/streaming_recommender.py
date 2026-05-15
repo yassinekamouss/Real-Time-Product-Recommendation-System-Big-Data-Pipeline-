@@ -144,24 +144,38 @@ def main():
         .filter(F.col("UserId").isNotNull())
 
     def process_micro_batch(batch_df, batch_id):
-        if batch_df.rdd.isEmpty():
-            return
+            # --- LE RADAR EST ICI ---
+            total_messages = batch_df.count()
+            logger.info(f"========== MICRO BATCH {batch_id} REÇU | Messages: {total_messages} ==========")
 
-        unique_users = batch_df.select("UserId").distinct()
-        indexed_users = user_indexer.transform(unique_users).select("UserId", "user_index")
-        indexed_users = indexed_users.filter(F.col("user_index").isNotNull())
+            if batch_df.rdd.isEmpty():
+                return
 
-        if max_user_index is not None:
-            indexed_users = indexed_users.filter(F.col("user_index") <= F.lit(max_user_index))
+            unique_users = batch_df.select("UserId").distinct()
+            logger.info(f"-> Utilisateurs uniques trouvés dans Kafka : {unique_users.count()}")
 
-        if indexed_users.rdd.isEmpty():
-            return
+            # Transformation via le modèle
+            try:
+                indexed_users = user_indexer.transform(unique_users).select("UserId", "user_index")
+                indexed_users = indexed_users.filter(F.col("user_index").isNotNull())
+                logger.info(f"-> Utilisateurs reconnus par le modèle ML : {indexed_users.count()}")
 
-        recommendations = als_model.recommendForUserSubset(indexed_users, TOP_N)
-        final_recs = recommendations.join(indexed_users, "user_index") \
-            .select("UserId", "recommendations")
+                if max_user_index is not None:
+                    indexed_users = indexed_users.filter(F.col("user_index") <= F.lit(max_user_index))
 
-        save_to_postgres(final_recs, batch_id, item_labels)
+                if indexed_users.rdd.isEmpty():
+                    logger.info("-> Aucun utilisateur n'a pu être traité. Annulation de l'insertion.")
+                    return
+
+                recommendations = als_model.recommendForUserSubset(indexed_users, TOP_N)
+                final_recs = recommendations.join(indexed_users, "user_index") \
+                    .select("UserId", "recommendations")
+
+                logger.info(f"-> Envoi vers PostgreSQL de {final_recs.count()} lignes...")
+                save_to_postgres(final_recs, batch_id, item_labels)
+                
+            except Exception as e:
+                logger.error(f"ERREUR FATALE PENDANT LE MICRO-BATCH : {e}")
 
     query = parsed_df.writeStream \
         .foreachBatch(process_micro_batch) \

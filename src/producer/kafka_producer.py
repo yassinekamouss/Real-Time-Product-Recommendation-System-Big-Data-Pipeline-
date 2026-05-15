@@ -24,7 +24,7 @@ CSV_FILE_PATH = '/opt/spark/data/Reviews.csv'
 CHUNK_SIZE = 50000
 
 def create_producer():
-    """Create and return a KafkaProducer instance with retry logic."""
+    """Create and return a KafkaProducer instance with retry logic and robust buffering."""
     producer = None
     retries = 10
     retry_delay = 5
@@ -34,7 +34,14 @@ def create_producer():
             logger.info(f"Attempting to connect to Kafka broker at {KAFKA_BROKER}...")
             producer = KafkaProducer(
                 bootstrap_servers=[KAFKA_BROKER],
-                value_serializer=lambda v: json.dumps(v).encode('utf-8')
+                value_serializer=lambda v: json.dumps(v).encode('utf-8'),
+                acks='all',  # Plus robuste que 1 : attend l'acquittement de tous les replicas
+                retries=5,   # NOUVEAU: Retentatives d'envoi internes au producer Kafka
+                buffer_memory=33554432, # NOUVEAU: 32MB de buffer
+                batch_size=16384,
+                linger_ms=10, # Légèrement augmenté pour favoriser les batchs
+                request_timeout_ms=30000,
+                max_block_ms=60000 # NOUVEAU: Timeout global pour le blocage (ex: buffer plein)
             )
             logger.info("Successfully connected to Kafka Broker.")
             break
@@ -49,6 +56,7 @@ def create_producer():
         
     return producer
 
+
 def process_and_send_data(producer):
     """Read CSV in chunks and send to Kafka topic with random delays."""
     logger.info(f"Starting to process file: {CSV_FILE_PATH}")
@@ -60,17 +68,17 @@ def process_and_send_data(producer):
     try:
         # Read the CSV file in chunks to optimize memory usage
         for chunk in pd.read_csv(CSV_FILE_PATH, chunksize=CHUNK_SIZE):
-            required_cols = ['UserId', 'ProductId', 'Score', 'Time']
+            required_cols = ['Id', 'UserId', 'ProductId', 'Score', 'Time']
             
             # Verify columns exist
             if not all(col in chunk.columns for col in required_cols):
                  logger.error(f"Missing required columns. Expected {required_cols}. Found: {list(chunk.columns)}")
-                 break
+                 sys.exit(1)
 
             for index, row in chunk.iterrows():
                 try:
                     # Split logique deterministe pour eviter le data leakage (streaming 40%).
-                    if int(row['Time']) % 10 >= 6:
+                    if int(row['Id']) % 10 >= 6:
                         message = {
                             'UserId': str(row['UserId']),
                             'ProductId': str(row['ProductId']),
@@ -86,7 +94,13 @@ def process_and_send_data(producer):
                     logger.error(f"Error processing row {index}: {e}")
                     
             logger.info(f"Successfully processed a chunk of {len(chunk)} records.")
-            
+        # --- À la fin de ta boucle d'envoi ---
+        logger.info("Fin de la lecture du CSV. Envoi des messages restants (Flush)...")
+
+        producer.flush(timeout=30) 
+
+        logger.info("Kafka producer proprement fermé.")
+
     except FileNotFoundError as e:
         logger.error(f"Erreur fatale: Le fichier CSV n'a pas été trouvé. {e}")
         sys.exit(1)

@@ -42,10 +42,11 @@ def main():
         df = spark.read.csv(DATA_PATH, header=True, inferSchema=True)
         
         df = df.withColumn("Time", col("Time").cast("long"))
+        df = df.withColumn("Id", col("Id").cast("int"))
 
         # Split logique deterministe pour eviter le data leakage (batch 60%).
-        df = df.filter(col("Time") % 10 < 6)
-        logger.info("Split logique 60%% applique (Time %% 10 < 6)")
+        df = df.filter(col("Id") % 10 < 6)
+        logger.info("Split logique 60%% applique (Id %% 10 < 6)")
 
         df = df.select(
             df['UserId'].cast('string'),

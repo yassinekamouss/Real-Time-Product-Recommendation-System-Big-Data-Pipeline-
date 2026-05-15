@@ -33,12 +33,19 @@ with DAG(
     create_kafka_topic = BashOperator(
         task_id='create_kafka_topic',
         bash_command='''python -c "
+import sys
 from kafka.admin import KafkaAdminClient, NewTopic
+from kafka.errors import TopicAlreadyExistsError
+
 try:
     admin = KafkaAdminClient(bootstrap_servers='kafka:29092')
     admin.create_topics([NewTopic(name='user-ratings', num_partitions=1, replication_factor=1)])
+    print('Topic créé avec succès')
+except TopicAlreadyExistsError:
+    print('Le Topic existe déjà.')
 except Exception as e:
-    print('Topic may already exist or error:', e)
+    print('Erreur fatale de création du topic:', e)
+    sys.exit(1) # <-- INDISPENSABLE pour qu'Airflow détecte l'échec
 "'''
     )
 
