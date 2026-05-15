@@ -119,3 +119,52 @@ def get_recommendations(user_id: str):
         if conn:
             # Release connection back to the pool
             db_pool.putconn(conn)
+
+@app.get("/api/model/metrics")
+def get_model_metrics():
+    """
+    Récupère les métriques du modèle MLOps (RMSE, Rank, RegParam) à partir de metrics.json.
+    """
+    metrics_path = "/opt/spark/models/als_model/metrics.json"
+    if os.path.exists(metrics_path):
+        with open(metrics_path, "r") as f:
+            return json.load(f)
+    return {"rmse": "N/A", "rank": "N/A", "regParam": "N/A", "error": "Fichier introuvable"}
+
+@app.get("/api/model/versions")
+def get_model_versions():
+    """
+    Scanne le répertoire d'archives pour renvoyer la liste des modèles enregistrés.
+    """
+    archive_dir = "/opt/spark/models/archive/"
+    versions = []
+    if os.path.exists(archive_dir):
+        for item in os.listdir(archive_dir):
+            if os.path.isdir(os.path.join(archive_dir, item)) and item.startswith("als_model_"):
+                versions.append(item.replace("als_model_", ""))
+    return sorted(versions, reverse=True)
+
+@app.get("/api/streaming/stats")
+def get_streaming_stats():
+    """
+    Récupère le nombre total de lignes dans la base de données en temps réel pour le Dashboard MLOps.
+    """
+    if not db_pool:
+        raise HTTPException(status_code=500, detail="Database pool not available.")
+    
+    conn = None
+    cur = None
+    try:
+        conn = db_pool.getconn()
+        cur = conn.cursor()
+        cur.execute("SELECT COUNT(*) FROM user_recommendations;")
+        count = cur.fetchone()[0]
+        return {"total_recommendations": count}
+    except Exception as e:
+        return {"total_recommendations": "Erreur SQL", "details": str(e)}
+    finally:
+        if cur:
+            cur.close()
+        if conn:
+            db_pool.putconn(conn)
+

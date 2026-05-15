@@ -1,6 +1,8 @@
 import os
-import shutil
+from datetime import datetime
 import logging
+import shutil
+import json
 from pyspark.sql import SparkSession
 from pyspark.sql.functions import col
 import pyspark.sql.functions as F
@@ -38,13 +40,12 @@ def main():
 
     try:
         logger.info(f"Chargement des données depuis {DATA_PATH}...")
-        print(f"DEBUG: Tentative de lecture du fichier au chemin exact -> {DATA_PATH}")
         df = spark.read.csv(DATA_PATH, header=True, inferSchema=True)
         
         df = df.withColumn("Time", col("Time").cast("long"))
         df = df.withColumn("Id", col("Id").cast("int"))
 
-        # Split logique deterministe pour eviter le data leakage (batch 60%).
+        # Split logique deterministe pour eviter le data leakage
         df = df.filter(col("Id") % 10 < 6)
         logger.info("Split logique 60%% applique (Id %% 10 < 6)")
 
@@ -59,20 +60,15 @@ def main():
         df = df.dropDuplicates(['UserId', 'ProductId'])
 
         logger.info("Filtrage strict : utilisateurs (>= 5 avis) et produits (>= 5 notes)...")
-        # Garder uniquement les utilisateurs avec >= 5 avis
         user_counts = df.groupBy("UserId").count().filter(F.col("count") >= 5).select("UserId")
         df = df.join(user_counts, "UserId", "inner")
         
-        # Garder uniquement les produits avec >= 5 notes
         item_counts = df.groupBy("ProductId").count().filter(F.col("count") >= 5).select("ProductId")
         df = df.join(item_counts, "ProductId", "inner")
 
         logger.info("Prétraitement : Transformation avec StringIndexer...")
-        
-        # 1. OPTIMISATION : Mise en cache des données après nettoyage pour éviter de tout recalculer
         df.cache()
-        logger.info(f"Nombre de lignes après nettoyage et filtrage : {df.count()}")
-
+        
         user_indexer = StringIndexer(inputCol="UserId", outputCol="user_index", handleInvalid="keep")
         item_indexer = StringIndexer(inputCol="ProductId", outputCol="item_index", handleInvalid="keep")
 
@@ -82,9 +78,7 @@ def main():
         item_indexer_model = item_indexer.fit(df)
         df = item_indexer_model.transform(df)
 
-        # 3. Séparation stricte : 90% (Train/Validation) et 10% (Test final)
         logger.info("Split des données : 90% (Train+Validation), 10% (Test)...")
-        # On extrait les 10% de données non rencontrées pour le test final de l'architecture
         (train_val_data, test_data) = df.randomSplit([0.9, 0.1], seed=42)
 
         als = ALS(
@@ -100,14 +94,12 @@ def main():
             predictionCol="prediction"
         )
         
-        # 4. Ajustement des hyperparamètres pour respecter l'énoncé
-        logger.info("Configuration de la grille d'hyperparamètres (légère)...")
+        logger.info("Configuration de la grille d'hyperparamètres...")
         param_grid = ParamGridBuilder() \
             .addGrid(als.rank, [10, 20]) \
             .addGrid(als.regParam, [0.1, 0.05]) \
             .build()
 
-        # TrainValidationSplit va diviser le set de 90% en interne (trainRatio=0.88 équivaut à ~80% train / ~10% validation)
         tvs = TrainValidationSplit(
             estimator=als,
             estimatorParamMaps=param_grid,
@@ -117,33 +109,58 @@ def main():
 
         logger.info("Entraînement et validation du modèle ALS en cours...")
         tvs_model = tvs.fit(train_val_data)
-        
-        # Extraction du meilleur modèle trouvé par la grille
         best_model = tvs_model.bestModel
 
-        # 5. Évaluation sur les 10% restants (strictement inconnus)
         logger.info("Évaluation finale du modèle sur le set de test (10%)...")
         test_predictions = best_model.transform(test_data)
         final_rmse = evaluator.evaluate(test_predictions)
         logger.info(f"*** RMSE FINAL SUR LE SET DE TEST = {final_rmse} ***")
 
-        
-        logger.info("Sauvegarde des modèles en cours...")
-        # Bloc de sécurité : création du dossier parent et nettoyage des anciens modèles pour éviter les plantages d'écriture
-        base_models_dir = "/opt/spark/models"
-        if not os.path.exists(base_models_dir):
-            os.makedirs(base_models_dir, exist_ok=True)
-        
-        # Sauvegarde du modèle
-        best_model.write().overwrite().save(MODEL_DIR)
-        logger.info(f"Best Modèle ALS sauvegardé vers : {MODEL_DIR}")
-        
-        user_indexer_model.write().overwrite().save(USER_INDEXER_PATH)
-        logger.info(f"User Indexer sauvegardé vers : {USER_INDEXER_PATH}")
-        
-        item_indexer_model.write().overwrite().save(ITEM_INDEXER_PATH)
-        logger.info(f"Item Indexer sauvegardé vers : {ITEM_INDEXER_PATH}")
+        # --- Extraction des métriques ---
+        try:
+            reg_param = best_model.getOrDefault(best_model.getParam("regParam"))
+        except:
+            reg_param = 0.1 
 
+        metrics_data = {
+            "rmse": final_rmse,
+            "rank": best_model.rank,
+            "regParam": reg_param,
+            "timestamp": datetime.now().isoformat()
+        }
+        
+        logger.info("Implémentation du Versioning et sauvegarde...")
+        base_models_dir = "/opt/spark/models"
+        archive_dir = os.path.join(base_models_dir, "archive")
+        
+        if not os.path.exists(archive_dir):
+            os.makedirs(archive_dir, exist_ok=True)
+
+        version_tag = datetime.now().strftime("v_%Y%m%d_%H%M%S")
+        versioned_model_path = f"file://{archive_dir}/als_model_{version_tag}"
+        best_model.write().save(versioned_model_path)
+        logger.info(f"Version archivée sous : {versioned_model_path}")
+        
+        for path in [MODEL_DIR, USER_INDEXER_PATH, ITEM_INDEXER_PATH]:
+            local_path = path.replace("file://", "")
+            if os.path.exists(local_path):
+                shutil.rmtree(local_path, ignore_errors=True)
+
+        # 1. Sauvegarder avec Spark (crée les dossiers en root)
+        best_model.write().overwrite().save(MODEL_DIR)
+        user_indexer_model.write().overwrite().save(USER_INDEXER_PATH)
+        item_indexer_model.write().overwrite().save(ITEM_INDEXER_PATH)
+
+        # 2. LA CORRECTION CRITIQUE : Déverrouiller le dossier AVANT d'écrire le JSON
+        os.system(f"chmod -R 777 {base_models_dir}")
+        logger.info("Permissions 777 appliquées. Le dossier est modifiable par tous.")
+
+        # 3. Écrire le fichier metrics.json avec Airflow
+        metrics_file = os.path.join(MODEL_DIR.replace("file://", ""), "metrics.json")
+        with open(metrics_file, "w") as f:
+            json.dump(metrics_data, f, indent=4)
+            
+        logger.info(f"Modèles de production et métriques mis à jour avec succès.")
         logger.info("Pipeline d'entraînement optimisé terminé avec succès.")
         
     except Exception as e:

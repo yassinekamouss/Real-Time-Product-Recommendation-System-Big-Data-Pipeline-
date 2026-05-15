@@ -1,34 +1,34 @@
 <!doctype html>
-<html lang="fr">
+<html lang="fr" class="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Amazon Intelligence</title>
-    <!-- Polices typographiques distinctives pour un look éditorial luxueux -->
+    <title>Amazon Intelligence | MLOps Dashboard</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400&family=Outfit:wght@300;400;500&display=swap"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Space+Grotesk:wght@300..700&display=swap"
       rel="stylesheet" />
     <style>
-      /* Variables CSS - Thème "Haute Couture & Data" */
+      /* Brutalist / Technical Dark Aesthetic */
       :root {
-        --bg-color: #faf9f6;
-        --surface-color: #ffffff;
-        --text-primary: #121212;
-        --text-secondary: #5c5c5c;
-        --accent-color: #b59b6a; /* Beige doré très subtil */
-        --border-color: #e2e0d8;
-        --shadow: 0 10px 40px -10px rgba(0, 0, 0, 0.05);
-        --shadow-hover: 0 20px 50px -15px rgba(0, 0, 0, 0.08);
-        --transition: all 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-
-        --font-display: "Cormorant Garamond", serif;
-        --font-body: "Outfit", sans-serif;
-        --container-width: 1000px;
+        --bg-base: #050505;
+        --bg-panel: #0a0a0a;
+        --bg-elevated: #111111;
+        --text-pure: #ffffff;
+        --text-muted: #888888;
+        --text-dim: #444444;
+        --accent-neon: #ccff00; /* Sharp neon chartreuse */
+        --accent-danger: #ff3333;
+        --border-subtle: #222222;
+        --border-focus: #444444;
+        
+        --font-mono: 'JetBrains Mono', monospace;
+        --font-sans: 'Space Grotesk', sans-serif;
+        
+        --transition-fast: 0.2s cubic-bezier(0.16, 1, 0.3, 1);
       }
 
-      /* Reset & Base */
       * {
         box-sizing: border-box;
         margin: 0;
@@ -36,395 +36,458 @@
       }
 
       body {
-        background-color: var(--bg-color);
-        color: var(--text-primary);
-        font-family: var(--font-body);
-        line-height: 1.6;
-        min-height: 100vh;
+        background-color: var(--bg-base);
+        color: var(--text-pure);
+        font-family: var(--font-sans);
+        display: flex;
+        height: 100vh;
+        overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+        background-image: 
+          linear-gradient(var(--border-subtle) 1px, transparent 1px),
+          linear-gradient(90deg, var(--border-subtle) 1px, transparent 1px);
+        background-size: 100px 100px;
+        background-position: -1px -1px;
+      }
+
+      /* Layout */
+      .sidebar {
+        width: 320px;
+        background-color: var(--bg-panel);
+        border-right: 1px solid var(--border-subtle);
+        padding: 2rem;
         display: flex;
         flex-direction: column;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        gap: 2rem;
+        overflow-y: auto;
+        z-index: 10;
       }
 
-      /* Typographie */
-      h1,
-      h2,
-      h3 {
-        font-family: var(--font-display);
-        font-weight: 400;
-      }
-
-      /* Header Minimaliste */
-      header {
-        padding: 3rem 2rem;
-        text-align: center;
-      }
-
-      .logo {
-        font-size: 2.5rem;
-        letter-spacing: -0.02em;
-        color: var(--text-primary);
-        text-decoration: none;
-        position: relative;
-        display: inline-block;
-      }
-
-      .logo::after {
-        content: "";
-        position: absolute;
-        bottom: -5px;
-        left: 50%;
-        transform: translateX(-50%);
-        width: 40px;
-        height: 1px;
-        background-color: var(--accent-color);
-      }
-
-      /* Hero / Recherche */
-      .hero {
-        max-width: var(--container-width);
-        margin: 2rem auto 4rem;
-        padding: 0 2rem;
-        text-align: center;
-      }
-
-      .hero-subtitle {
-        font-size: 1.1rem;
-        color: var(--text-secondary);
-        margin-bottom: 2.5rem;
-        font-weight: 300;
-      }
-
-      .search-container {
-        display: flex;
-        justify-content: center;
-        align-items: stretch;
-        max-width: 600px;
-        margin: 0 auto;
-        position: relative;
-      }
-
-      .search-input {
+      .main-content {
         flex: 1;
-        padding: 1.25rem 1.5rem;
-        font-family: var(--font-body);
-        font-size: 1rem;
-        color: var(--text-primary);
-        background-color: var(--surface-color);
-        border: 1px solid var(--border-color);
-        border-right: none;
-        outline: none;
-        transition: var(--transition);
+        display: flex;
+        flex-direction: column;
+        overflow-y: auto;
+        position: relative;
       }
 
-      .search-input:focus {
-        border-color: var(--text-primary);
-      }
-
-      .search-input::placeholder {
-        color: #a0a0a0;
-        font-weight: 300;
-      }
-
-      .search-button {
-        padding: 0 2.5rem;
-        background-color: var(--text-primary);
-        color: white;
-        font-family: var(--font-body);
-        font-size: 0.9rem;
+      /* Typography */
+      h1 {
+        font-size: 1.5rem;
+        letter-spacing: -0.03em;
         font-weight: 500;
         text-transform: uppercase;
-        letter-spacing: 0.05em;
-        border: 1px solid var(--text-primary);
+      }
+
+      h2 {
+        font-size: 0.75rem;
+        font-family: var(--font-mono);
+        color: var(--text-muted);
+        text-transform: uppercase;
+        letter-spacing: 0.1em;
+        margin-bottom: 1rem;
+        border-bottom: 1px solid var(--border-subtle);
+        padding-bottom: 0.5rem;
+        display: flex;
+        justify-content: space-between;
+      }
+
+      .logo-container {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+      }
+
+      .logo-dot {
+        width: 12px;
+        height: 12px;
+        background-color: var(--accent-neon);
+        box-shadow: 0 0 10px var(--accent-neon);
+      }
+
+      /* Panels */
+      .panel {
+        background-color: var(--bg-elevated);
+        border: 1px solid var(--border-subtle);
+        padding: 1.5rem;
+      }
+
+      /* Metrics */
+      .metric-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+      }
+
+      .metric-box {
+        display: flex;
+        flex-direction: column;
+        gap: 0.25rem;
+      }
+
+      .metric-label {
+        font-family: var(--font-mono);
+        font-size: 0.65rem;
+        color: var(--text-muted);
+      }
+
+      .metric-value {
+        font-family: var(--font-mono);
+        font-size: 1.25rem;
+        font-weight: 400;
+        color: var(--accent-neon);
+      }
+
+      .metric-value.large {
+        font-size: 2rem;
+      }
+
+      .live-indicator {
+        display: inline-block;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background-color: var(--accent-neon);
+        animation: blink 1s infinite alternate;
+      }
+
+      @keyframes blink {
+        0% { opacity: 0.2; }
+        100% { opacity: 1; box-shadow: 0 0 8px var(--accent-neon); }
+      }
+
+      /* Form Elements — styles globaux (sidebar, etc.) */
+      select, button {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        background-color: var(--bg-base);
+        color: var(--text-pure);
+        border: 1px solid var(--border-focus);
+        padding: 0.75rem 1rem;
+        width: 100%;
+        outline: none;
+        transition: var(--transition-fast);
+      }
+
+      /* Input global — sidebar uniquement */
+      input {
+        font-family: var(--font-mono);
+        font-size: 0.8rem;
+        background-color: var(--bg-base);
+        color: var(--text-pure);
+        border: 1px solid var(--border-focus);
+        padding: 0.75rem 1rem;
+        outline: none;
+        transition: var(--transition-fast);
+        /* PAS de width:100% ici pour ne pas bloquer le flex */
+      }
+
+      select:focus, input:focus {
+        border-color: var(--accent-neon);
+      }
+
+      button {
+        background-color: var(--text-pure);
+        color: var(--bg-base);
+        font-weight: 600;
         cursor: pointer;
-        transition: var(--transition);
+        text-transform: uppercase;
+        border: none;
       }
 
-      .search-button:hover {
-        background-color: transparent;
-        color: var(--text-primary);
+      button:hover {
+        background-color: var(--accent-neon);
       }
 
-      /* Résultats & Grille de Cartes */
-      .results-section {
-        flex: 1;
-        max-width: var(--container-width);
+      /* Recommendation Area */
+      .rec-container {
+        padding: 3rem;
+        max-width: 1200px;
         margin: 0 auto;
-        padding: 0 2rem 4rem;
         width: 100%;
       }
 
-      .loader {
-        display: none;
-        text-align: center;
-        font-family: var(--font-display);
-        font-size: 1.5rem;
-        font-style: italic;
-        color: var(--text-secondary);
-        animation: pulse 1.5s infinite ease-in-out;
+      /* ─── FIX SEARCH WRAPPER ─── */
+      .search-wrapper {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 3rem;
+        max-width: 800px;
+        width: 100%;
       }
 
-      @keyframes pulse {
-        0%,
-        100% {
-          opacity: 0.4;
-        }
-        50% {
-          opacity: 1;
-        }
+      .search-wrapper input {
+        flex: 1 1 0%;      /* flex-grow:1, flex-shrink:1, flex-basis:0 */
+        min-width: 0;      /* autorise le rétrécissement sous width naturelle */
+        width: 0;          /* base à 0 pour que flex-grow distribue tout l'espace */
+        font-size: 1.25rem;
+        padding: 1.25rem 1.5rem;
+        background-color: var(--bg-elevated);
+        color: var(--text-pure);
       }
 
-      .error-message {
-        display: none;
-        text-align: center;
-        color: #a05252;
-        background-color: #fdf7f7;
-        padding: 1rem;
-        border: 1px solid #f0d4d4;
-        font-weight: 300;
+      .search-wrapper input::placeholder {
+        color: var(--text-muted);
+      }
+
+      .search-wrapper input:-webkit-autofill,
+      .search-wrapper input:-webkit-autofill:hover, 
+      .search-wrapper input:-webkit-autofill:focus, 
+      .search-wrapper input:-webkit-autofill:active {
+        -webkit-text-fill-color: var(--text-pure) !important;
+        -webkit-box-shadow: 0 0 0px 1000px var(--bg-elevated) inset !important;
+        transition: background-color 5000s ease-in-out 0s;
+      }
+
+      .search-wrapper button {
+        flex: 0 0 auto;    /* le bouton garde sa taille naturelle */
+        font-size: 1rem;
+        padding: 0 2.5rem;
+        width: auto;       /* annule le width:100% hérité */
       }
 
       .grid {
         display: grid;
-        grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-        gap: 2.5rem;
-        margin-top: 2rem;
+        grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        gap: 1.5rem;
       }
 
-      /* Design des cartes: style "Galerie d'Art" / Portfolio */
       .card {
-        background-color: var(--surface-color);
-        border: 1px solid var(--border-color);
-        padding: 2.5rem 2rem;
-        transition: var(--transition);
+        background-color: var(--bg-panel);
+        border: 1px solid var(--border-subtle);
+        padding: 2rem 1.5rem;
         position: relative;
-        overflow: hidden;
-        display: flex;
-        flex-direction: column;
-        justify-content: space-between;
-
-        /* Initialement caché pour l'animation */
-        opacity: 0;
-        transform: translateY(20px);
+        transition: var(--transition-fast);
       }
 
       .card:hover {
-        box-shadow: var(--shadow-hover);
-        transform: translateY(-5px);
-        border-color: var(--accent-color);
+        border-color: var(--accent-neon);
+        transform: translateY(-2px);
       }
 
-      /* Effet "Ruban" discret sur le hover de la carte */
       .card::before {
-        content: "";
+        content: "REC";
         position: absolute;
         top: 0;
-        left: 0;
-        width: 100%;
-        height: 3px;
-        background-color: var(--accent-color);
-        transform: scaleX(0);
-        transform-origin: left;
-        transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        right: 0;
+        background-color: var(--text-dim);
+        color: var(--bg-base);
+        font-family: var(--font-mono);
+        font-size: 0.5rem;
+        padding: 0.1rem 0.3rem;
       }
 
       .card:hover::before {
-        transform: scaleX(1);
+        background-color: var(--accent-neon);
       }
 
-      .card-number {
-        font-family: var(--font-display);
-        font-style: italic;
-        font-size: 2rem;
-        color: var(--accent-color);
-        line-height: 1;
-        margin-bottom: 1.5rem;
-        opacity: 0.6;
-      }
-
-      .card-product-id {
+      .card-index {
+        font-family: var(--font-mono);
+        color: var(--text-dim);
         font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        color: var(--text-secondary);
-        margin-bottom: 0.5rem;
+        margin-bottom: 1rem;
+      }
+
+      .card-id {
+        font-size: 1.25rem;
+        font-weight: 300;
         word-break: break-all;
       }
 
-      .card-rating-wrapper {
-        margin-top: 2rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid var(--border-color);
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+      /* Utilities */
+      .loader {
+        display: none;
+        font-family: var(--font-mono);
+        color: var(--accent-neon);
+        margin-bottom: 1rem;
       }
-
-      .card-rating-label {
-        font-size: 0.75rem;
-        text-transform: uppercase;
-        letter-spacing: 0.1em;
-        color: #a0a0a0;
-      }
-
-      .card-rating-value {
-        font-family: var(--font-display);
-        font-size: 1.5rem;
-        color: var(--text-primary);
-      }
-
-      /* Footer discret */
-      footer {
-        text-align: center;
-        padding: 3rem 2rem;
-        border-top: 1px solid var(--border-color);
-        font-size: 0.8rem;
-        color: var(--text-secondary);
-        font-weight: 300;
-        letter-spacing: 0.02em;
-      }
-
-      /* Classe utilitaire pour l'animation (délai contrôlé en JS) */
-      .fade-in-up {
-        animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards;
-      }
-
-      @keyframes fadeInUp {
-        to {
-          opacity: 1;
-          transform: translateY(0);
-        }
+      .error-msg {
+        display: none;
+        color: var(--accent-danger);
+        font-family: var(--font-mono);
+        margin-bottom: 1rem;
+        border-left: 2px solid var(--accent-danger);
+        padding-left: 1rem;
       }
     </style>
   </head>
   <body>
-    <header>
-      <a href="#" class="logo">Amazon Intelligence</a>
-    </header>
-
-    <section class="hero">
-      <p class="hero-subtitle">
-        Moteur de recommandations personnalisé prédictif.
-      </p>
-      <div class="search-container">
-        <input
-          type="text"
-          id="userInput"
-          class="search-input"
-          placeholder="Saisissez un UserId (ex: A3SGXH7AUHU8GW)..."
-          autocomplete="off"
-          spellcheck="false" />
-        <button id="searchBtn" class="search-button">Rechercher</button>
+    <!-- Sidebar / Admin Dashboard Controls -->
+    <aside class="sidebar">
+      <div class="logo-container">
+        <div class="logo-dot"></div>
+        <h1>Amazon<br/>Intelligence</h1>
       </div>
-    </section>
 
-    <main class="results-section">
-      <div id="loader" class="loader">Analyse de l'historique en cours...</div>
-      <div id="errorMessage" class="error-message"></div>
-      <div id="gridContainer" class="grid"></div>
+      <!-- MLOps Section -->
+      <div class="panel">
+        <h2>MLOps State <span id="model-timestamp" class="metric-label" style="text-transform:none"></span></h2>
+        <div class="metric-grid" style="margin-bottom: 1.5rem;">
+          <div class="metric-box">
+            <span class="metric-label">RMSE</span>
+            <span class="metric-value" id="kpi-rmse">--</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">RANK</span>
+            <span class="metric-value" id="kpi-rank">--</span>
+          </div>
+          <div class="metric-box">
+            <span class="metric-label">REG_PARAM</span>
+            <span class="metric-value" id="kpi-reg">--</span>
+          </div>
+        </div>
+        
+        <div class="metric-box">
+          <span class="metric-label" style="margin-bottom: 0.5rem;">MODEL REGISTRY VERSION</span>
+          <select id="version-select">
+            <option value="">Loading versions...</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Data Engineering / Streaming -->
+      <div class="panel">
+        <h2>Data Stream <span class="live-indicator"></span></h2>
+        <div class="metric-box" style="margin-top: 1rem;">
+          <span class="metric-label">PROCESSED RECOMMENDATIONS</span>
+          <span class="metric-value large" id="kpi-db-count">0</span>
+        </div>
+        <div class="metric-box" style="margin-top: 1rem;">
+          <span class="metric-label">DATABASE</span>
+          <span class="metric-label" style="color:var(--text-pure)">PostgreSQL (Real-time sync)</span>
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Central Area -->
+    <main class="main-content">
+      <div class="rec-container">
+        <h2 style="border:none; margin-bottom: 2rem; font-size: 1rem; color: var(--text-pure);">INFERENCE ENGINE UI</h2>
+        
+        <div class="search-wrapper">
+          <input type="text" id="userInput" placeholder="USER_ID (e.g. A3SGXH7AUHU8GW)" autocomplete="off" spellcheck="false" />
+          <button id="searchBtn">EXECUTE /</button>
+        </div>
+
+        <div id="loader" class="loader">> INFERENCE IN PROGRESS... RUNNING ALS_MODEL</div>
+        <div id="errorMessage" class="error-msg"></div>
+        
+        <div id="gridContainer" class="grid"></div>
+      </div>
     </main>
 
-    <footer>Propulsé par Apache Spark MLlib — Modèle ALS (RMSE : 0.90)</footer>
-
     <script>
-  document.addEventListener("DOMContentLoaded", () => {
-    const searchBtn = document.getElementById("searchBtn");
-    const userInput = document.getElementById("userInput");
-    const gridContainer = document.getElementById("gridContainer");
-    const loader = document.getElementById("loader");
-    const errorMessage = document.getElementById("errorMessage");
+      const API_BASE = window.location.origin;
 
-    // API Endpoint
-    const API_BASE_URL = "http://localhost:8000/recommendations/user";
-    
-    // Fonction pour afficher des erreurs de façon élégante
-    const showError = (msg) => {
-      errorMessage.textContent = msg;
-      errorMessage.style.display = "block";
-      gridContainer.innerHTML = "";
-    };
+      document.addEventListener("DOMContentLoaded", () => {
+        fetch(`${API_BASE}/api/model/metrics`)
+          .then(res => res.json())
+          .then(data => {
+            if(!data.error) {
+              document.getElementById('kpi-rmse').innerText = typeof data.rmse === 'number' ? data.rmse.toFixed(4) : data.rmse;
+              document.getElementById('kpi-rank').innerText = data.rank;
+              document.getElementById('kpi-reg').innerText = data.regParam;
+              if (data.timestamp) {
+                const date = new Date(data.timestamp);
+                document.getElementById('model-timestamp').innerText = `[${date.toLocaleTimeString()}]`;
+              }
+            } else {
+              document.getElementById('kpi-rmse').innerText = "ERR";
+            }
+          })
+          .catch(e => console.error("Error fetching metrics:", e));
 
-    // Fonction de nettoyage
-    const resetUI = () => {
-      errorMessage.style.display = "none";
-      gridContainer.innerHTML = "";
-      loader.style.display = "block";
-    };
+        fetch(`${API_BASE}/api/model/versions`)
+          .then(res => res.json())
+          .then(versions => {
+            const select = document.getElementById('version-select');
+            select.innerHTML = "";
+            if (versions && versions.length > 0) {
+              versions.forEach(v => {
+                const opt = document.createElement("option");
+                opt.value = v;
+                opt.innerText = v;
+                select.appendChild(opt);
+              });
+            } else {
+              select.innerHTML = "<option>No archives found</option>";
+            }
+          })
+          .catch(e => console.error("Error fetching versions:", e));
 
-    // Écouteur sur le bouton
-    searchBtn.addEventListener("click", async () => {
-      const userId = userInput.value.trim();
+        const pollStats = () => {
+          fetch(`${API_BASE}/api/streaming/stats`)
+            .then(res => res.json())
+            .then(data => {
+              const val = data.total_recommendations;
+              document.getElementById('kpi-db-count').innerText = typeof val === 'number' ? val.toLocaleString() : val;
+            })
+            .catch(e => console.error("Error fetching stats:", e));
+        };
+        pollStats();
+        setInterval(pollStats, 5000);
 
-      if (!userId) {
-        showError("Veuillez saisir un identifiant utilisateur valide.");
-        return;
-      }
+        const searchBtn = document.getElementById("searchBtn");
+        const userInput = document.getElementById("userInput");
+        const gridContainer = document.getElementById("gridContainer");
+        const loader = document.getElementById("loader");
+        const errorMessage = document.getElementById("errorMessage");
 
-      resetUI();
+        searchBtn.addEventListener("click", async () => {
+          const userId = userInput.value.trim();
+          if (!userId) {
+            errorMessage.textContent = "REQUIREMENT ERROR: USER_ID IS NULL.";
+            errorMessage.style.display = "block";
+            gridContainer.innerHTML = "";
+            return;
+          }
 
-      try {
-        const response = await fetch(
-          `${API_BASE_URL}/${encodeURIComponent(userId)}`
-        );
-        const json = await response.json();
+          errorMessage.style.display = "none";
+          gridContainer.innerHTML = "";
+          loader.style.display = "block";
 
-        loader.style.display = "none";
+          try {
+            const response = await fetch(`${API_BASE}/recommendations/user/${encodeURIComponent(userId)}`);
+            const json = await response.json();
+            loader.style.display = "none";
 
-        if (!response.ok) {
-          // Gestion du 404 personnalisé
-          throw new Error(
-            json.detail || "Le serveur a retourné une erreur."
-          );
-        }
+            if (!response.ok) throw new Error(json.detail || "SERVER_FAULT");
 
-        // CORRECTION ICI : on cible la clé 'recommendations' envoyée par FastAPI
-        const recommendations = json.recommendations;
+            const recs = json.recommendations;
+            if (!Array.isArray(recs) || recs.length === 0) {
+              errorMessage.textContent = "> NO DATA RETURNED FOR USER_ID";
+              errorMessage.style.display = "block";
+              return;
+            }
 
-        if (
-          !Array.isArray(recommendations) ||
-          recommendations.length === 0
-        ) {
-          showError(
-            "Aucune recommandation disponible pour cet utilisateur."
-          );
-          return;
-        }
-
-        // Génération dynamique des cartes
-        recommendations.forEach((productId, index) => {
-          const card = document.createElement("div");
-          card.className = "card fade-in-up";
-          card.style.animationDelay = `${index * 0.1}s`;
-
-          card.innerHTML = `
-              <div>
-                  <div class="card-number">N°0${index + 1}</div>
-                  <div class="card-product-id">Référence Produit<br/><strong>${productId}</strong></div>
-              </div>
-              <div class="card-rating-wrapper">
-                  <span class="card-rating-label">Recommandation</span>
-                  <span class="card-rating-value">Top Pick</span>
-              </div>
-          `;
-          gridContainer.appendChild(card);
+            recs.forEach((productId, index) => {
+              const card = document.createElement("div");
+              card.className = "card";
+              card.style.animation = `fadeInUp 0.4s ease forwards ${index * 0.05}s`;
+              card.style.opacity = "0";
+              card.innerHTML = `
+                <div class="card-index">0${index + 1} // MATCH</div>
+                <div class="card-id">${productId}</div>
+              `;
+              gridContainer.appendChild(card);
+            });
+          } catch (e) {
+            loader.style.display = "none";
+            errorMessage.textContent = `> ${e.message.toUpperCase()}`;
+            errorMessage.style.display = "block";
+          }
         });
-      } catch (error) {
-        loader.style.display = "none";
-        showError(
-          error.message ||
-            "Impossible de contacter l'API (Vérifiez qu'uvicorn tourne sur le port 8000)"
-        );
-      }
-    });
 
-    // Permettre la recherche en appuyant sur "Entrée"
-    userInput.addEventListener("keypress", (e) => {
-      if (e.key === "Enter") {
-        searchBtn.click();
+        userInput.addEventListener('keypress', (e) => {
+          if (e.key === 'Enter') searchBtn.click();
+        });
+      });
+    </script>
+    <style>
+      @keyframes fadeInUp {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
       }
-    });
-  });
-</script>
+    </style>
   </body>
 </html>

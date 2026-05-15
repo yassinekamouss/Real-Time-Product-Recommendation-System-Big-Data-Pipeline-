@@ -60,6 +60,9 @@ services:
     ports:
       - "8080:8080"
       - "7077:7077"
+      - "4040:4040"
+      - "4041:4041"
+      - "4042:4042"
     volumes:
       - ./data:/opt/spark/data
       - ./models:/opt/spark/models
@@ -145,16 +148,15 @@ services:
     networks:
       - bigdata-net
 
-
   # -------------------------------------
   # 4. EXPOSITION REST API & FRONTEND
   # -------------------------------------
   api-recommendation:
-    build: 
+    build:
       # On indique le dossier où se trouve l'API
       context: ./src/dashboard
       # On pointe vers le bon Dockerfile
-      dockerfile: Dockerfile.api 
+      dockerfile: Dockerfile.api
     container_name: api_recommendation
     ports:
       # On expose le port 8000 de l'API vers le port 8000 de ton Ubuntu
@@ -166,12 +168,15 @@ services:
       - POSTGRES_DB=airflow
       - POSTGRES_USER=airflow
       - POSTGRES_PASSWORD=airflow_pass
+    volumes:
+      - ./models:/opt/spark/models
     networks:
       # Il doit être sur le même réseau que PostgreSQL et Kafka
       - bigdata-net
     depends_on:
       # Il a besoin de la BD pour fonctionner
-      - postgres
+      postgres:
+        condition: service_healthy
 
 volumes:
   kafka_data:

@@ -136,6 +136,8 @@ def main():
         .option("kafka.bootstrap.servers", KAFKA_BROKER) \
         .option("subscribe", KAFKA_TOPIC) \
         .option("startingOffsets", "earliest") \
+        .option("maxOffsetsPerTrigger", 5000) \
+        .option("failOnDataLoss", "false") \
         .load()
 
     parsed_df = kafka_df.selectExpr("CAST(value AS STRING) AS value") \
@@ -180,7 +182,7 @@ def main():
     query = parsed_df.writeStream \
         .foreachBatch(process_micro_batch) \
         .option("checkpointLocation", CHECKPOINT_DIR) \
-        .trigger(processingTime="10 seconds") \
+        .trigger(processingTime="120 seconds") \
         .start()
 
     query.awaitTermination()
