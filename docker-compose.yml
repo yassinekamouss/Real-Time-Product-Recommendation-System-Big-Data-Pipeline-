@@ -64,6 +64,7 @@ services:
       - ./data:/opt/spark/data
       - ./models:/opt/spark/models
       - ./src:/opt/spark/src
+      - ./data_processing:/opt/spark/data_processing 
     networks:
       - bigdata-net
 

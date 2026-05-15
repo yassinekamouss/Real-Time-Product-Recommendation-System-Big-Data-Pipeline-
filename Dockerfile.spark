@@ -4,4 +4,4 @@ FROM apache/spark:3.5.1
 USER root
 
 # Installation de la librairie pour le streaming
-RUN pip install --no-cache-dir psycopg2-binary
+RUN pip install --no-cache-dir psycopg2-binary numpy pandas
